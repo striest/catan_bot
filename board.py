@@ -88,7 +88,19 @@ class Board:
 		assert player > 0 and player < 5, 'player from 1-4'
 		self.roads[loc, 0] = player
 
-	def render_base(self, fig = None, ax = None):
+	def compute_settlement_spots(self):
+		"""
+		Valid settlement spot are those that are not taken, and are two hops away from anyother 
+		"""
+		invalid_idxs = np.argwhere(self.settlements[:, 0] != 0)
+		roads = self.settlements[invalid_idxs, 5:8].flatten()
+		roads = roads[roads != -1]
+		invalid_idxs = np.unique(self.roads[roads, 1:])
+		mask = np.ones(self.settlements.shape[0], dtype=bool)
+		mask[invalid_idxs] = False
+		return np.arange(self.settlements.shape[0], dtype=int)[mask]
+
+	def render_base(self, fig = None, ax = None, display_ids=False):
 		if fig is None or ax is None:
 			fig, ax = plt.subplots()
 		
@@ -99,15 +111,21 @@ class Board:
 			ax.text(tile[2], tile[3], '{}/{}'.format(tile[1], 6 - abs(7 - tile[1])), color='k', ha='center', va='center')
 
 		#settlement spots
-		for s in self.settlements:
-			ax.scatter(s[3], s[4], s = 16 + 64*s[1], c=self.get_player_color(s[0]))
+		for i, s in enumerate(self.settlements):
+			ax.scatter(s[3], s[4], s = 80 if s[0] else 16, c=self.get_player_color(s[0]))
+			if s[1] == 2:
+				ax.scatter(s[3], s[4], s = 32, c='w')
+			if display_ids:
+				ax.text(s[3], s[4], i)
 
 		#roads
-		for i in self.roads:
+		for idx, i in enumerate(self.roads):
 			x = np.array([self.settlements[i[1]][3], self.settlements[i[2]][3]])
 			y = np.array([self.settlements[i[1]][4], self.settlements[i[2]][4]])
 			if i[0] != 0:
 				ax.plot(x, y, c=self.get_player_color(i[0]))
+			if display_ids:
+				ax.text(x.mean(), y.mean(), idx, fontsize=6)
 
 		ax.set_xlim(-6, 30)
 		ax.set_ylim(-6, 30)
@@ -166,6 +184,13 @@ if __name__ == '__main__':
 
 	b.render()
 	plt.show()
+
+	spots = b.compute_settlement_spots()
+	print(spots)
+	fig, ax = b.render_base()
+	ax.scatter(b.settlements[spots][:, 3], b.settlements[spots][:, 4], marker='x', c='r')
+	plt.show()
+	
 
 	"""
 	for s in b.settlements:
