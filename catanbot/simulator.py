@@ -27,6 +27,18 @@ class CatanSimulator:
 		self.vp = np.zeros(4)
 		self.max_vp = max_vp
 
+	def simulate(self, verbose=False):
+		"""
+		simulates a full game and returns the winner
+		"""
+		while not self.terminal:
+			act = self.players[self.turn].action()
+			if verbose:
+				print('Act = {}'.format(act))
+			self.step(act)
+		return (self.vp == self.max_vp).astype(int)
+	
+
 	@property
 	def terminal(self):
 		return self.vp.max() >= self.max_vp or self.nsteps > self.max_steps
@@ -38,6 +50,20 @@ class CatanSimulator:
 		self.turn = 0
 		self.nsteps = 0
 		self.vp *= 0
+
+	def reset_from(self, board):
+		"""
+		Start game from seed board (with initial placements)
+		"""
+		self.board = board
+		self.vp *= 0
+		for i, p in enumerate(self.players):
+			p.reset()
+			self.vp[i] = board.settlements[board.settlements[:, 0] == i+1][:, 1].sum()
+			p.board = board
+
+		self.turn = 0
+		self.nsteps = 0	
 
 	def reset_with_initial_placements(self):
 		self.base_reset()
@@ -73,7 +99,7 @@ class CatanSimulator:
 			card = self.board.get_dev_card()
 			self.players[self.turn].dev[card] += 1
 			if card == 2:#is VP
-				print('got VP')
+#				print('got VP')
 				self.vp[self.turn] += 1
 		elif atype == 1:
 			self.board.place_settlement(aloc, pval, False)
@@ -216,6 +242,9 @@ if __name__ == '__main__':
 	games = 50
 	turns = 0
 	wins = np.zeros(4)
+	print(s.simulate())
+	s.render()
+	exit(0)
 	while cnt < games:
 		print('Game {}'.format(cnt + 1))
 		print('Turn = {}, ({})'.format(s.nsteps+1, 'RGYB'[s.turn]))

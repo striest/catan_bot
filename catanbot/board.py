@@ -132,8 +132,7 @@ class Board:
 					v = self.tiles[tidx][1]
 					p += max(6 - abs(7 - v), 0)
 			out[i] = p
-		return np.stack([np.arange(54), out], axis=1)
-		
+		return np.stack([np.arange(54), out], axis=1).astype(int)
 
 	def render_base(self, fig = None, ax = None, display_ids=False):
 		if fig is None or ax is None:
