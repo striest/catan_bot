@@ -20,7 +20,7 @@ class CatanSimulator:
 			self.players = players
 		for i in range(4):
 			self.players[i].pidx = i
-		self.turn = None
+		self.turn = 0
 		self.nsteps = 0
 		self.max_steps = max_steps
 		self.roll = -1
@@ -51,19 +51,23 @@ class CatanSimulator:
 		self.nsteps = 0
 		self.vp *= 0
 
-	def reset_from(self, board):
+	def reset_from(self, board, players=None, nsteps=0, resources=None):
 		"""
 		Start game from seed board (with initial placements)
 		"""
 		self.board = board
+		if players is not None:
+			self.players = players
 		self.vp *= 0
 		for i, p in enumerate(self.players):
-			p.reset()
+			if players is None:	
+				p.reset()
 			self.vp[i] = board.settlements[board.settlements[:, 0] == i+1][:, 1].sum()
 			p.board = board
 
 		self.turn = 0
 		self.nsteps = 0	
+		self.assign_resources()
 
 	def reset_with_initial_placements(self):
 		self.base_reset()

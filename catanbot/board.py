@@ -69,6 +69,20 @@ class Board:
 		self.dev_cards = self.dev_dist[dev_idxs]
 		self.dev_idx = 0
 
+	def reset_from_string(self, s):
+		"""
+		Resets the Catan board according to a comma-separated string of the form:
+		<R1><V1>, <R2><V2>, ..., where R is one of {0-5} for resources, and V is one of {0-12} (0 for the desert)
+		"""
+		self.reset()
+		tokens = s.split(',')
+		for i, token in enumerate(tokens):
+			t = token.strip()
+			r = int(t[0])
+			d = int(t[1:])
+			self.tiles[i, 0] = r
+			self.tiles[i, 1] = d
+
 	def has_dev_cards(self):
 		return self.dev_idx < 25
 
