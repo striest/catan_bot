@@ -154,10 +154,12 @@ class MCTSSearch:
 	"""
 	def __init__(self, simulator, n_samples):
 		self.simulator = simulator
+		self.original_board = simulator.board
+		self.original_agents = simulator.players
 		self.root = MCTSNode(None, None, simulator.turn, copy.deepcopy(simulator.board), copy.deepcopy(simulator.players), False, simulator)
 		self.n_samples = n_samples
 
-	def search(self, n_rollouts = None, max_time = None, c=1.0):
+	def search(self, n_rollouts = None, max_time = None, c=1.0, verbose=False):
 		"""
 		1. Search for a leaf node
 		2. If the leaf hasn't been visited, collect a rollout and propagate up.
@@ -172,29 +174,36 @@ class MCTSSearch:
 		prev = time.time()
 		r = 0
 		t_running = 0
+		r_t_running = 0
 		while r < n_rollouts and t_running < max_time:
 		#	print(self)
 			t_itr = time.time()-prev
 			t_remaining =  (t_running / (r+1)) * (n_rollouts - r) if max_time == float('inf') else max_time - t_running
-			print('Rollout #{} (t={:.2f}s) time elapsed = {:.2f}s, time remaining = {:.2f}s'.format(r, t_itr, t_running, t_remaining))
 			t_running += t_itr
 			prev = time.time()
 #			import pdb;pdb.set_trace()
 			curr, path = self.find_leaf(c=c)
-#			print(curr)
-			print('depth = {}, path = {}'.format(curr.turn_number, path))
 			maxdepth = (curr.turn_number == 8 and not curr.is_road)
-			if maxdepth:
-				print('max depth')
+#			print(curr)
+			if verbose:
+				print('Rollout #{} (t={:.2f}s) time elapsed = {:.2f}s, time remaining = {:.2f}s rollout time = {:.2f}'.format(r, t_itr, t_running, t_remaining, r_t_running))
+				print('depth = {}, path = {}'.format(curr.turn_number, path))
+				if maxdepth:
+					print('max depth')
 			if curr.is_visited and not maxdepth:
 				ch = curr.expand()
 				curr.children = ch
 			else:
+				rtstart = time.time()
 				result = curr.rollout(n_times = self.n_samples)
+				r_t_running += (time.time() - rtstart)
 				r += self.n_samples
 				while curr:
 					curr.stats += result
 					curr = curr.parent
+
+		#Restore the simulator if you need to call MCTS again
+		self.simulator.reset_from(self.original_board, players = self.original_agents)
 
 	def find_leaf(self, c=1.0):
 		"""
@@ -203,8 +212,11 @@ class MCTSSearch:
 		curr = self.root
 		path = []
 		while not curr.is_leaf:
+			#Randomly sample argmaxes to get better coverage when using multiple trees
 			ucbs = curr.children_ucb(c=c)
-			idx = np.argmax(ucbs)
+			_max = np.max(ucbs)
+			maxidxs = np.argwhere(ucbs >= _max).flatten()
+			idx = np.random.choice(maxidxs)
 			curr = curr.children[idx]
 			path.append(curr.parent_action)
 		return curr, path
@@ -250,7 +262,7 @@ if __name__ == '__main__':
 	
 
 	search = MCTSSearch(s, n_samples=1)	
-	search.search(max_time=600, c=0.5)
+	search.search(max_time=30, c=0.5, verbose=True)
 	print(search.dump(search.root, 0, c=0))
 	print('_-' * 100, end='\n\n')
 	acts = search.get_optimal_path()
