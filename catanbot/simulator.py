@@ -58,7 +58,7 @@ class CatanSimulator:
 		self.board = board
 		if players is not None:
 			self.players = players
-		self.vp *= 0
+		self.vp = self.vp * 0
 		for i, p in enumerate(self.players):
 			if players is None:	
 				p.reset()

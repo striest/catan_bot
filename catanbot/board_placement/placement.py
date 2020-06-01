@@ -70,12 +70,13 @@ class MCTSNode:
 				ch.append(MCTSNode(self, a, self.turn_number, c_board, c_agents, False, self.simulator))
 		return ch
 
-	def children_ucb(self, c=1.0):
+	def children_ucb(self, c=1.0, bias=0.0):
 		"""
 		Computes the UCB for all the children of this node.
 		UCB = wc + c*sqrt(ln(sp)/sc)
 		wc = child's win ratio, sp = #parent simulations, sc = #child simulations
 		note that UCB can be inf (or like 10e10 for practical purposes)
+		implementing a bias term for parallel exploration as in Liu 2019.
 		"""
 		ucbs = np.zeros(len(self.children))
 		for idx, ch in enumerate(self.children):
@@ -85,7 +86,7 @@ class MCTSNode:
 				ch_wins = ch.stats[self.player_from_turn(ch.turn_number)-1]
 				ch_total = ch.stats.sum()
 				par_total = self.stats.sum()
-				ucbs[idx] = (ch_wins/ch_total) + c*np.sqrt(np.log(par_total)/ch_total)
+				ucbs[idx] = (ch_wins/ch_total) + c*np.sqrt(np.log(par_total + bias)/(ch_total + bias))
 		return ucbs		
 			
 	def player_from_turn(self, turn):
