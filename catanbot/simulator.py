@@ -50,6 +50,7 @@ class CatanSimulator:
 		self.turn = 0
 		self.nsteps = 0
 		self.vp *= 0
+		self.update_trade_ratios()
 
 	def reset_from(self, board, players=None, nsteps=0, resources=None):
 		"""
@@ -68,6 +69,7 @@ class CatanSimulator:
 		self.turn = 0
 		self.nsteps = 0	
 		self.assign_resources()
+		self.update_trade_ratios()
 
 	def reset_with_initial_placements(self):
 		self.base_reset()
@@ -87,6 +89,7 @@ class CatanSimulator:
 					if r > 0:
 						self.players[i%4].resources[r] += 1
 		self.assign_resources()
+		self.update_trade_ratios()
 
 	def step(self, action):
 		pval = self.turn + 1
@@ -109,6 +112,7 @@ class CatanSimulator:
 			self.board.place_settlement(aloc, pval, False)
 			self.players[self.turn].resources -= acost
 			self.vp[self.turn] += 1
+			self.update_trade_ratios()
 		elif atype == 2:
 			self.board.place_settlement(aloc, pval, True)
 			self.players[self.turn].resources -= acost
@@ -176,6 +180,24 @@ class CatanSimulator:
 				moves.append(np.concatenate([np.array([3, spot]), costs[3]], axis=0))
 
 		return np.stack(moves, axis=0)
+
+	def update_trade_ratios(self):
+		for i, player in enumerate(self.players):
+			player.trade_ratios = self.compute_trade_ratios(i)
+
+	def compute_trade_ratios(self, pidx):
+		"""
+		Compute the trade ratios/ports for player pidx
+		"""
+		ratios = 4 * np.ones(6).astype(int)
+		ratios[0] = 100000
+		settlements = self.board.settlements[self.board.settlements[:, 0] == 1+pidx]
+		ports = settlements[settlements[:, 2] != 0][:, 2]
+		if 6 in ports:
+			ratios[1:] = 3
+		ports = ports[ports < 6]
+		ratios[ports] = 2
+		return ratios
 	
 	def trade_for(self, pidx, target):
 		"""
@@ -236,9 +258,6 @@ if __name__ == '__main__':
 	s_c = copy.deepcopy(s)
 
 	print('INIT')
-	prod = s.board.compute_production()
-	print(prod)
-	print(prod[np.argsort(prod[:, 1])[-15:]])
 	s.render()
 
 	t = time.time()
@@ -246,9 +265,10 @@ if __name__ == '__main__':
 	games = 50
 	turns = 0
 	wins = np.zeros(4)
-	print(s.simulate())
-	s.render()
-	exit(0)
+#	print(s.simulate())
+	
+	#s.render()
+#	exit(0)
 	while cnt < games:
 		print('Game {}'.format(cnt + 1))
 		print('Turn = {}, ({})'.format(s.nsteps+1, 'RGYB'[s.turn]))
@@ -258,14 +278,14 @@ if __name__ == '__main__':
 		s.step(act)
 
 		if s.terminal:
-#			s.render()
+			s.render()
 			wins[np.argmax(s.vp)] += 1
 			turns += s.nsteps
 			#s.reset_with_initial_placements()
 			s = copy.deepcopy(s_c)
 			cnt += 1
 
-#			s.render()
+		s.render()
 	
 	print('Simulated {} games ({} turns) in {:.2f}s'.format(games, turns, time.time() - t))
 	print('Win rates = {}'.format(wins))

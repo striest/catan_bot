@@ -35,6 +35,7 @@ class Board:
 		self.tiles = np.zeros((19, 4)).astype(int) #resouece type, dice val, x, y
 		self.roads = np.zeros((72, 3)).astype(int) #occupied_player, settlement 1, settlement 2
 		self.settlements = np.zeros((54, 11)).astype(int) #player, settlement type, port, x_pos, y_pos, r1, r2, r3, t1, t2, t3
+		self.port_locations = np.zeros((9, 2)).astype(int) #The two settlement spots that access this port
 		self.dev_cards = np.zeros(25)
 		self.dev_idx = 0
 
@@ -52,22 +53,30 @@ class Board:
 
 		self.roads[:, 1] = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 36, 12, 13, 14, 15, 41, 17, 18, 19, 45, 21, 22, 3, 4, 5, 6, 7, 8, 9, 10, 11, 50, 12, 13, 14, 15, 16, 36, 17, 18, 19, 20, 41, 21, 22, 23])
 		self.roads[:, 2] = np.array([48, 24, 25, 49, 27, 28, 29, 50, 31, 32, 33, 34, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 51, 37, 38, 39, 40, 52, 42, 43, 44, 53, 46, 47, 48, 24, 25, 26, 49, 27, 28, 29, 30, 51, 31, 32, 33, 34, 35, 52, 37, 38, 39, 40, 53, 42, 43, 44])
+
+		self.port_locations[:, 0] = np.array([48, 1, 6, 35, 20, 22, 45, 52, 7])
+		self.port_locations[:, 1] = np.array([0, 25, 30, 16, 44, 46, 53, 36, 49])
 		
 		self.tile_dist = np.array([0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5])
 		self.value_dist = np.array([2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12])
 		self.dev_dist = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 4, 4, 5, 5])
+		self.port_dist = np.array([1, 2, 3, 4, 5, 6, 6, 6, 6]) #6 for a 3:1 port
 			
 		
 	def reset(self):
 		tile_idxs = np.random.permutation(19)
 		value_idxs = np.random.permutation(18)
 		dev_idxs = np.random.permutation(25)
+		port_idxs = np.random.permutation(9)
 		self.tiles[:, 0] = self.tile_dist[tile_idxs]
 		self.tiles[:, 1][self.tiles[:, 0] != 0] = self.value_dist[value_idxs]
 		self.roads[:, 0] *= 0
 		self.settlements[:, [0, 1, 2]] *= 0
 		self.dev_cards = self.dev_dist[dev_idxs]
 		self.dev_idx = 0
+		#idk why I can't just broadcast it
+		for i, locs in enumerate(self.port_locations):
+			self.settlements[locs, 2] = self.port_dist[port_idxs[i]]
 
 	def reset_from_string(self, s):
 		"""
@@ -148,7 +157,7 @@ class Board:
 			out[i] = p
 		return np.stack([np.arange(54), out], axis=1).astype(int)
 
-	def render_base(self, fig = None, ax = None, display_ids=False):
+	def render_base(self, fig = None, ax = None, display_ids=False, display_ports=True):
 		if fig is None or ax is None:
 			fig, ax = plt.subplots()
 		
@@ -160,11 +169,15 @@ class Board:
 
 		#settlement spots
 		for i, s in enumerate(self.settlements):
+			buf = ''
 			ax.scatter(s[3], s[4], s = 80 if s[0] else 16, c=self.get_player_color(s[0]))
 			if s[1] == 2:
 				ax.scatter(s[3], s[4], s = 32, c='w')
 			if display_ids:
-				ax.text(s[3], s[4], i)
+				buf += str(i)
+			if s[2] != 0 and display_ports:
+				buf += ' ' + ['', 'O', 'G', 'S', 'W', 'B', 'A'][s[2]]
+			ax.text(s[3], s[4], buf, ha = 'center' if len(buf) > 1 else 'right')
 
 		#roads
 		for idx, i in enumerate(self.roads):
@@ -173,7 +186,7 @@ class Board:
 			if i[0] != 0:
 				ax.plot(x, y, c=self.get_player_color(i[0]))
 			if display_ids:
-				ax.text(x.mean(), y.mean(), idx, fontsize=6)
+				ax.text(x.mean(), y.mean(), idx, fontsize=6, ha='center')
 
 		ax.set_xlim(-6, 30)
 		ax.set_ylim(-6, 30)
@@ -186,7 +199,7 @@ class Board:
 		if fig is None or ax is None:
 			fig, ax = plt.subplots()
 
-		fig, ax = self.render_base(fig, ax)
+		fig, ax = self.render_base(fig, ax, display_ports=False)
 
 		for s in self.settlements:
 			p = 0

@@ -171,7 +171,7 @@ class RayWorker:
 	def expand(self, node):
 		oldsim = node.simulator
 		node.simulator = self.simulator
-		result = node.expand()
+		result = node.expand(threshold=6)
 		node.simulator = oldsim
 		return result
 
@@ -187,6 +187,7 @@ if __name__ == '__main__':
 	b.reset()
 	agents = [HeuristicAgent(b), HeuristicAgent(b), HeuristicAgent(b), HeuristicAgent(b)]
 	s = CatanSimulator(board=b, players = agents, max_vp=8)
+	s.render()
 	
 	search = RayMCTS(s, n_samples=1, n_threads=16)	
 	search.search(max_time=180, c=1.0, verbose=True)

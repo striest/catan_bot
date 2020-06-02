@@ -28,18 +28,17 @@ class MCTSNode:
 	def is_visited(self):
 		return self.stats.sum() > 0
 
-	def expand(self):
+	def expand(self, threshold=7):
 		"""
 		Expand all valid moves 
 		"""
-		
 		#If you're a road-placement node, children will be settlement-placement for next player.
 		#Heuristically, only take the ones with value 8 and up
 		ch = []
 		if not self.is_road:
 			avail = self.board.compute_settlement_spots()
 			prod = self.board.compute_production()
-			prod = prod[prod[:, 1] > 7]
+			prod = prod[prod[:, 1] >= threshold]
 			actions = np.intersect1d(avail, prod[:, 0])
 			for a in actions:
 				c_board = copy.deepcopy(self.board)
