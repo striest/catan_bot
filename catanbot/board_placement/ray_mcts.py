@@ -15,7 +15,7 @@ class RayMCTS:
 	Perform parallel MCTS using Ray.
 	"""	
 	def __init__(self, simulator, n_samples, n_threads=1):
-		ray.init()
+		ray.init(ignore_reinit_error=True)
 		self.simulator = simulator
 		self.original_board = simulator.board
 		self.original_agents = simulator.players
@@ -93,9 +93,11 @@ class RayMCTS:
 				placements = [path[:2] for path in paths]
 				placements.sort(key=lambda x:x[0] * 100 + x[1] if len(x) >1 else 0)
 				print('explored {}'.format(placements))
+				print('avg depth = {}'.format(np.array([len(p) for p in paths]).mean()))
 
 		#Restore the simulator if you need to call MCTS again
 		self.simulator.reset_from(self.original_board, players = self.original_agents)
+		ray.shutdown()
 
 	def find_leaves(self, c=1.0, verbose=False):
 		leaves = []

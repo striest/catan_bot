@@ -6,12 +6,14 @@ from catanbot.board import Board
 from catanbot.agents.heuristic_agent import HeuristicAgent
 from catanbot.simulator import CatanSimulator
 from catanbot.board_placement.placement import MCTSSearch, MCTSNode
+from catanbot.board_placement.ray_mcts import RayMCTS
 
 if __name__ == '__main__':
 	plt.ion()
 	board_str = input('Put in board string as a comma-separated list of RD, R=resource type(Ore=1, Wheat=2, Sheep=3, Wood=4, Brick=5, Desert=0), D=dice value (0 for desert):\n')
+	port_str = input('Put port string as a comma-separated list of resources from the top-left port going clockwise (Ore=1, Wheat=2, Sheep=3, Wood=4, Brick=5, All=6):\n')
 	b = Board()
-	b.reset_from_string(board_str)
+	b.reset_from_string(board_str, port_str)
 	b.render();plt.draw()
 
 	turn_loc = int(input('Input turn order (1-4):\n'))
@@ -36,9 +38,10 @@ if __name__ == '__main__':
 	s = CatanSimulator(board=b, players = agents, max_vp=8)
 	s.reset_from(b, agents)
 	s.render();plt.draw()
-	mcts = MCTSSearch(s, n_samples=1)
+	#mcts = MCTSSearch(s, n_samples=1)
+	mcts = RayMCTS(s, n_samples=1, n_threads=16)
 	mcts.root.turn_number = turn_loc - 1
-	mcts.search(max_time=tmax, c=c)
+	mcts.search(max_time=tmax, c=c, verbose=True)
 	print(mcts.dump(mcts.root, 0, c=0))
 	print('_-' * 100, end='\n\n')
 	acts = mcts.get_optimal_path()
@@ -85,9 +88,10 @@ if __name__ == '__main__':
 	s = CatanSimulator(board=b, players = agents, max_vp=8)
 	s.reset_from(b, agents)
 	s.render();plt.draw()
-	mcts = MCTSSearch(s, n_samples=1)
+	#mcts = MCTSSearch(s, n_samples=1)
+	mcts = RayMCTS(s, n_samples=1, n_threads=16)
 	mcts.root.turn_number = 8 - turn_loc
-	mcts.search(max_time=tmax, c=c)
+	mcts.search(max_time=tmax, c=c, verbose=True)
 	print(mcts.dump(mcts.root, 0, c=0))
 	print('_-' * 100, end='\n\n')
 	acts = mcts.get_optimal_path()

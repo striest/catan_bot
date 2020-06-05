@@ -78,19 +78,27 @@ class Board:
 		for i, locs in enumerate(self.port_locations):
 			self.settlements[locs, 2] = self.port_dist[port_idxs[i]]
 
-	def reset_from_string(self, s):
+	def reset_from_string(self, tile_string, port_string):
 		"""
 		Resets the Catan board according to a comma-separated string of the form:
 		<R1><V1>, <R2><V2>, ..., where R is one of {0-5} for resources, and V is one of {0-12} (0 for the desert)
+		Ports are a comma-separated string going clockwise from the top left.
 		"""
 		self.reset()
-		tokens = s.split(',')
+		tokens = tile_string.split(',')
 		for i, token in enumerate(tokens):
 			t = token.strip()
 			r = int(t[0])
 			d = int(t[1:])
 			self.tiles[i, 0] = r
 			self.tiles[i, 1] = d
+
+		tokens = port_string.split(',')
+		for i, token in enumerate(tokens):
+			t = token.strip()
+			r = int(t[0])
+			self.settlements[self.port_locations[i, 0], 2] = r
+			self.settlements[self.port_locations[i, 1], 2] = r
 
 	def has_dev_cards(self):
 		return self.dev_idx < 25
