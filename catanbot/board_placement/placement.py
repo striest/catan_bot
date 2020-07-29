@@ -28,7 +28,7 @@ class MCTSNode:
 	def is_visited(self):
 		return self.stats.sum() > 0
 
-	def expand(self, threshold=7):
+	def expand(self, threshold=5):
 		"""
 		Expand all valid moves 
 		"""

@@ -285,7 +285,7 @@ if __name__ == '__main__':
 			s = copy.deepcopy(s_c)
 			cnt += 1
 
-		s.render()
+#		s.render()
 	
 	print('Simulated {} games ({} turns) in {:.2f}s'.format(games, turns, time.time() - t))
 	print('Win rates = {}'.format(wins))
