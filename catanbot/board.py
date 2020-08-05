@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import copy
 
 class Board:
 	"""
@@ -171,6 +172,121 @@ class Board:
 					p += max(6 - abs(7 - v), 0)
 			out[i] = p
 		return np.stack([np.arange(54), out], axis=1).astype(int)
+
+	def count_settlements_for(self, player):
+		player_spots = self.settlements[self.settlements[:, 0] == player]
+		s = player_spots[player_spots[:, 1] == 1]
+		return s.shape[0]
+
+	def count_cities_for(self, player):
+		player_spots = self.settlements[self.settlements[:, 0] == player]
+		s = player_spots[player_spots[:, 1] == 2]
+		return s.shape[0]
+	
+	def count_roads_for(self, player):
+		player_spots = self.roads[self.roads[:, 0] == player]
+		return player_spots.shape[0]
+
+	def compute_longest_road(self):
+		"""
+		Compute each player's longest road.
+		"""
+		maxlen = np.array([self.compute_longest_road_for(i+1) for i in range(4)])
+		return maxlen
+
+	def compute_longest_road_for(self, player):
+		"""
+		Given the sparsity of the Catan graph, it should be more efficient to use BFS from each vertex. (O(V*E), E ~ V, O(V^2))
+		NOTE: Other player settlements can split longest road
+		"""
+		edges = self.roads[self.roads[:, 0] == player]
+		#Building the adjacency list makes my life a lot easier
+		alist = {}
+		for e in edges:
+			if not e[1] in alist.keys():
+				alist[e[1]] = set()
+			if not e[2] in alist.keys():
+				alist[e[2]] = set()
+
+			alist[e[1]].add(e[2])
+			alist[e[2]].add(e[1])
+		
+		maxlen = self.bfs_longest_path(alist)
+
+		if maxlen == -1:
+			maxlen = self.exhaustive_longest_path(alist)
+			
+		return maxlen
+
+	def exhaustive_longest_path(self, alist):
+		"""
+		Brute-forces all paths from vertices of degree 1 to find longest path when there are cycles.
+		"""
+		paths = []
+		start_points = []
+		maxlen = 0
+		maxpath = None
+		for source in alist:
+			if len(alist[source]) == 1:
+				start_points.append(source)
+
+		for source in start_points:
+			paths = self.get_paths(source, alist, set())
+			for path in paths:
+				if len(path) - 1 > maxlen:
+					maxpath = path
+				maxlen = max(maxlen, len(path) - 1)
+
+		return maxlen
+
+	def get_paths(self, curr, alist, visited):
+		"""
+		Expand a path by creating a new path for each unvisited neighbor
+		"""
+		out = []
+		neighbors = alist[curr]
+		for v in neighbors:
+			if v not in visited:
+				visited_new = copy.deepcopy(visited)
+				visited_new.add(curr)
+				paths = self.get_paths(v, alist, visited_new)
+				for path in paths:
+					out.append([curr] + path)
+		if not out:
+			return [[curr]]
+		else:
+			return out
+			
+									
+	def bfs_longest_path(self, alist):
+		"""
+		Given an adjacency list, find the longest path. Since this doesn't work if the graph has a cycle, return -1 if a cycle is detected.
+		"""
+		maxlen = 0
+		for source in alist.keys():
+			visited = {source}
+			prevs = {source:-1}
+			frontier = [source]
+			is_acyclic = True
+			curr = 0
+			#BFS
+			while frontier:
+				curr += 1
+				f_new = []
+				for u in frontier:
+					neighbors = alist[u]
+					for v in neighbors:
+						if not v in visited:
+							visited.add(v)
+							prevs[v] = u
+							f_new.append(v)
+						#Check for edge-backedge cycle. Ignore if it's that.
+						elif v != prevs[u]:
+							return -1
+				frontier = f_new	
+			maxlen = max(maxlen, curr - 1)
+		return maxlen
+
 
 	def render_base(self, fig = None, ax = None, display_ids=False):
 		if fig is None or ax is None:

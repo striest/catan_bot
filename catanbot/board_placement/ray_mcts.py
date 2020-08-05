@@ -211,7 +211,7 @@ if __name__ == '__main__':
 	b = Board()
 	b.reset()
 	agents = [HeuristicAgent(b), HeuristicAgent(b), HeuristicAgent(b), HeuristicAgent(b)]
-	s = CatanSimulator(board=b, players = agents, max_vp=8)
+	s = CatanSimulator(board=b, players = agents, max_vp=10)
 	s.render()
 	
 	search = RayMCTS(s, n_samples=1, n_threads=16)	

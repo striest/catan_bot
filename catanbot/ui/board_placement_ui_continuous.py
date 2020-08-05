@@ -36,7 +36,7 @@ class BoardPlacementUI:
 		self.turn_number = 0
 
 		self.agents = [HeuristicAgent(self.board), HeuristicAgent(self.board), HeuristicAgent(self.board), HeuristicAgent(self.board)]
-		s = CatanSimulator(board=self.board, players = self.agents, max_vp=8)
+		s = CatanSimulator(board=self.board, players = self.agents, max_vp=10)
 		s.reset_from(self.board, self.agents)
 
 		mcts = RayMCTS(s, n_samples=1, n_threads=self.nthreads)

@@ -14,6 +14,14 @@ class HeuristicAgent(Agent):
 
 	"""
 
+	def dev_card_dist(self):
+		"""
+		Make dev cards more likely to be picked if you have more cards in-hand
+		"""
+		ncards = self.resources.sum()
+		dev_prob = ((ncards - 2)/5).clip(0, 1)
+		#Passing is always first
+
 	def action(self):
 		acts = self.compute_actions()
 
@@ -44,10 +52,13 @@ class HeuristicAgent(Agent):
 			return cacts[np.argmax(cvals)]
 
 		#build roads towards available settlement spots, but only if you arent working toward a settlement
-		if (acts[:, 0] == 3).any():
+		avail_spots = self.board.compute_settlement_spots()
+		placed_roads = self.board.roads[self.board.roads[:, 0] == 1+self.pidx]
+		build_spots = placed_roads[:, [1, 2]].flatten()
+		if (acts[:, 0] == 3).any() and np.intersect1d(build_spots, avail_spots).size == 0:
 			racts = acts[acts[:, 0] == 3]
 			rlocs = racts[:, 1]
-			avail_spots = self.board.compute_settlement_spots()
+
 			roads = self.board.roads[rlocs]
 			r_vals = np.zeros(len(roads))
 			for i in range(len(roads)):
@@ -61,5 +72,12 @@ class HeuristicAgent(Agent):
 				r_vals[i] = val
 			return racts[np.argmax(r_vals)]
 
+		if (acts[:, 0] == 0).any():
+			dacts = acts[(acts[:, 0] == 0) | (acts[:, 0] == 4)]
+			dev_acts = acts[acts[:, 0] == 0]
+			dev_prob = ((self.resources.sum() - 2)/5).clip(0, 1)
+	
+			if random.random() < dev_prob: #Pick a dev carc
+				return random.choice(dacts)
 
-		return random.choice(acts)
+		return acts[0]

@@ -27,6 +27,11 @@ class CatanSimulator:
 		self.vp = np.zeros(4)
 		self.max_vp = max_vp
 
+		self.road_len = np.zeros(4, dtype=int)
+		self.longest_road_pidx = -1
+		self.knights_played = np.zeros(4, dtype=int)
+		self.largest_army_pidx = -1
+
 	def simulate(self, verbose=False):
 		"""
 		simulates a full game and returns the winner
@@ -38,7 +43,6 @@ class CatanSimulator:
 			self.step(act)
 		return (self.vp == self.max_vp).astype(int)
 	
-
 	@property
 	def terminal(self):
 		return self.vp.max() >= self.max_vp or self.nsteps > self.max_steps
@@ -51,6 +55,11 @@ class CatanSimulator:
 		self.nsteps = 0
 		self.vp *= 0
 		self.update_trade_ratios()
+
+		self.road_len = np.zeros(4, dtype=int)
+		self.longest_road_pidx = -1
+		self.knights_played = np.zeros(4, dtype=int)
+		self.largest_army_pidx = -1
 
 	def reset_from(self, board, players=None, nsteps=0, resources=None):
 		"""
@@ -70,6 +79,11 @@ class CatanSimulator:
 		self.nsteps = 0	
 		self.assign_resources()
 		self.update_trade_ratios()
+
+		self.road_len = np.zeros(4, dtype=int)
+		self.longest_road_pidx = -1
+		self.knights_played = np.zeros(4, dtype=int)
+		self.largest_army_pidx = -1
 
 	def reset_with_initial_placements(self):
 		self.base_reset()
@@ -91,6 +105,11 @@ class CatanSimulator:
 		self.assign_resources()
 		self.update_trade_ratios()
 
+		self.road_len = np.zeros(4, dtype=int)
+		self.longest_road_pidx = -1
+		self.knights_played = np.zeros(4, dtype=int)
+		self.largest_army_pidx = -1
+
 	def step(self, action):
 		pval = self.turn + 1
 		avail_actions = self.compute_actions(self.turn)
@@ -105,6 +124,11 @@ class CatanSimulator:
 			self.players[self.turn].resources -= acost
 			card = self.board.get_dev_card()
 			self.players[self.turn].dev[card] += 1
+			if card == 1:#Is knight
+				#PLACEHOLDER: Assume knights are immediately played
+				self.knights_played[self.turn] += 1
+				self.check_largest_army()
+
 			if card == 2:#is VP
 #				print('got VP')
 				self.vp[self.turn] += 1
@@ -120,10 +144,40 @@ class CatanSimulator:
 		elif atype == 3:
 			self.board.place_road(aloc, pval)
 			self.players[self.turn].resources -= acost
+			self.check_longest_road()
 
 		self.turn = (self.turn + 1) % 4
 		self.nsteps += 1
 		self.assign_resources()
+
+	def check_largest_army(self):
+		kmax = self.knights_played.max()
+		kmaxidx = np.argmax(self.knights_played)
+		if kmax >= 3:
+			if self.largest_army_pidx == -1:
+				self.largest_army_pidx = kmaxidx
+				self.vp[self.largest_army_pidx] += 2
+			elif self.knights_played[self.largest_army_pidx] < kmax:
+				self.vp[self.largest_army_pidx] -= 2
+				self.largest_army_pidx = kmaxidx
+				self.vp[self.largest_army_pidx] += 2
+
+	def check_longest_road(self):
+		"""
+		Updates values for longest road. If longest road less than 5, nobody gets points.
+		Incumbent player keeps longest road in case of ties.
+		"""
+		self.road_len = self.board.compute_longest_road()
+		rmax = self.road_len.max()
+		rmaxidx = np.argmax(self.road_len)
+		if rmax >= 5:
+			if self.longest_road_pidx == -1:
+				self.longest_road_pidx = rmaxidx
+				self.vp[self.longest_road_pidx] += 2
+			elif self.road_len[self.longest_road_pidx] < rmax:
+				self.vp[self.longest_road_pidx] -= 2
+				self.longest_road_pidx = rmaxidx
+				self.vp[self.longest_road_pidx] += 2
 		
 	def assign_resources(self):
 		roll = np.random.randint(1, 7) + np.random.randint(1, 7)
@@ -155,7 +209,7 @@ class CatanSimulator:
 			moves.append(np.concatenate([np.array([0, 0]), costs[0]], axis=0))
 
 		#Compute settlements
-		if (player.resources - costs[1] >= 0).all():
+		if (player.resources - costs[1] >= 0).all() and self.board.count_settlements_for(pidx+1) < 5:
 			avail_spots = self.board.compute_settlement_spots()
 			road_spots = self.board.roads[self.board.roads[:, 0] == 1 + pidx][:, 1:].flatten()
 			valid_spots = np.intersect1d(avail_spots, road_spots)
@@ -163,13 +217,13 @@ class CatanSimulator:
 				moves.append(np.concatenate([np.array([1, spot]), costs[1]], axis=0))
 
 		#Compute cities
-		if (player.resources - costs[2] >= 0).all():
+		if (player.resources - costs[2] >= 0).all() and self.board.count_cities_for(pidx+1) < 4:
 			spots = np.argwhere((self.board.settlements[:, 0] == 1+pidx) & (self.board.settlements[:, 1] == 1)).flatten()
 			for spot in spots:
 				moves.append(np.concatenate([np.array([2, spot]), costs[2]], axis=0))
 
 		#Compute roads
-		if (player.resources - costs[3] >= 0).all():
+		if (player.resources - costs[3] >= 0).all() and self.board.count_roads_for(pidx+1) < 15:
 			road_spots = np.argwhere(self.board.roads[:, 0] == 1 + pidx).flatten()
 			settlement_spots = np.concatenate([np.argwhere((self.board.settlements[:, 5:8] == r).any(axis=1)) for r in road_spots]).flatten()
 			one_hop_road_spots = np.concatenate([np.argwhere((self.board.roads[:, 1:3] == s).any(axis=1)) for s in settlement_spots]).flatten()
@@ -232,18 +286,20 @@ class CatanSimulator:
 
 	def render(self):
 		fig, axs = plt.subplots(1, 3, figsize = (18, 5))
-		plt.title('Turn = {} ({}), roll = {}'.format(self.nsteps, 'RGYB'[self.turn], self.roll))
+		plt.title('Turn = {} ({}), roll = {}'.format(self.nsteps, 'RGBY'[self.turn], self.roll))
 		self.board.render_base(fig, axs[0], display_ids=True)
 		self.board.render_pips(fig, axs[1])
 		txt = ""
 		for i in range(4):
-			txt += 'Player {} ({}):\n'.format(i+1, 'RGYB'[i])
+			txt += 'Player {} ({}):\n'.format(i+1, 'RGBY'[i])
 			txt += str(self.players[i])
 			txt += '\n\n'
 
 		txt = txt[:-1]
-		txt += str(self.vp)
+		txt += 'Victory Points = {}\n'.format(self.vp)
 		txt += '\n'
+		txt += 'Longest Road: {} Current = {}\n'.format(self.road_len, 'RGBYN'[self.longest_road_pidx])
+		txt += 'Largest Army: {} Current = {}\n'.format(self.knights_played, 'RGBYN'[self.largest_army_pidx])
 
 		axs[2].text(0, 0, txt, fontsize=6)
 		plt.show()
@@ -253,7 +309,7 @@ if __name__ == '__main__':
 	b = Board()
 	agents = [HeuristicAgent(b), Agent(b), Agent(b), Agent(b)]
 	agents = [HeuristicAgent(b), HeuristicAgent(b), HeuristicAgent(b), HeuristicAgent(b)]
-	s = CatanSimulator(board=b, players = agents, max_vp=8)
+	s = CatanSimulator(board=b, players = agents, max_vp=10)
 	s.reset_with_initial_placements()
 	s_c = copy.deepcopy(s)
 
@@ -271,21 +327,22 @@ if __name__ == '__main__':
 #	exit(0)
 	while cnt < games:
 		print('Game {}'.format(cnt + 1))
-		print('Turn = {}, ({})'.format(s.nsteps+1, 'RGYB'[s.turn]))
+		print('Turn = {}, ({})'.format(s.nsteps+1, 'RGBY'[s.turn]))
 		print('Resources = {}'.format(s.players[s.turn].resources))
 		act = s.players[s.turn].action()
 		print('Act = {}'.format(act))
 		s.step(act)
 
 		if s.terminal:
+			print('LONGEST ROAD:', s.board.compute_longest_road())
 			s.render()
 			wins[np.argmax(s.vp)] += 1
 			turns += s.nsteps
-			#s.reset_with_initial_placements()
-			s = copy.deepcopy(s_c)
+			s.reset_with_initial_placements()
+			#s = copy.deepcopy(s_c)
 			cnt += 1
 
-#		s.render()
+		s.render()
 	
 	print('Simulated {} games ({} turns) in {:.2f}s'.format(games, turns, time.time() - t))
 	print('Win rates = {}'.format(wins))

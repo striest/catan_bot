@@ -22,6 +22,8 @@ class Agent:
 		self.board = board
 		self.resources = np.zeros(6).astype(int)
 		self.dev = np.zeros(6).astype(int)
+		self.road_length = 0
+		self.army_size = 0
 		self.trade_ratios = np.ones(6).astype(int) * 4
 		self.trade_ratios[0] = 100000
 		self.pidx = -1
@@ -41,7 +43,7 @@ class Agent:
 		r = {a:b for a, b in zip(['Ore', 'Wheat', 'Sheep', 'Wood', 'Brick'], self.resources[1:])}
 		d = {a:b for a, b in zip(['Knight', 'VP', 'YOP', 'RB', 'M'], self.dev[1:])}
 		tr = {a:b for a, b in zip(['Ore', 'Wheat', 'Sheep', 'Wood', 'Brick'], self.trade_ratios[1:])}
-		return 'RESOURCES:\n{}\nDEV:\n{}\nRATIOS:\n{}\n'.format(r, d, tr)
+		return 'RESOURCES:\n{}\nDEV:\n{}\nRATIOS:\n{}\nROAD LEN = {}\tARMY SIZE = {}'.format(r, d, tr, self.road_length, self.army_size)
 	
 	def compute_actions(self):
 		"""
@@ -65,7 +67,7 @@ class Agent:
 			moves.append(np.concatenate([np.array([0, 0]), costs[0]], axis=0))
 
 		#Compute settlements
-		if (self.resources - costs[1] >= 0).all():
+		if (self.resources - costs[1] >= 0).all() and self.board.count_settlements_for(self.pidx+1) < 5:
 			avail_spots = self.board.compute_settlement_spots()
 			road_spots = self.board.roads[self.board.roads[:, 0] == 1 + self.pidx][:, 1:].flatten()
 			valid_spots = np.intersect1d(avail_spots, road_spots)
@@ -73,13 +75,13 @@ class Agent:
 				moves.append(np.concatenate([np.array([1, spot]), costs[1]], axis=0))
 
 		#Compute cities
-		if (self.resources - costs[2] >= 0).all():
+		if (self.resources - costs[2] >= 0).all() and self.board.count_cities_for(self.pidx+1) < 4:
 			spots = np.argwhere((self.board.settlements[:, 0] == 1+self.pidx) & (self.board.settlements[:, 1] == 1)).flatten()
 			for spot in spots:
 				moves.append(np.concatenate([np.array([2, spot]), costs[2]], axis=0))
 
 		#Compute roads
-		if (self.resources - costs[3] >= 0).all():
+		if (self.resources - costs[3] >= 0).all() and self.board.count_roads_for(self.pidx+1) < 15:
 			road_spots = np.argwhere(self.board.roads[:, 0] == 1 + self.pidx).flatten()
 			settlement_spots = np.concatenate([np.argwhere((self.board.settlements[:, 5:8] == r).any(axis=1)) for r in road_spots]).flatten()
 			one_hop_road_spots = np.concatenate([np.argwhere((self.board.roads[:, 1:3] == s).any(axis=1)) for s in settlement_spots]).flatten()
