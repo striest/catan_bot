@@ -5,7 +5,7 @@ A side project to use AI to give suggestions for initial placements in Settlers 
 1. Clone this repo somewhere.
 2. pip install it (`pip3 install .` from the base dir).
 3. Move to the ui directory (`cd catanbot/ui/`).
-4. Run the board placement script (`python3 board_placement_ui_continuous.py`).
+4. Run the board placement script (`python3 board_placement_ui_continuous.py (--nthreads <# threads> --c <exploration factor> --max_time <max time to run>)`).
 ### Args for `board_placement_ui_continuous.py`
 1. `--nthreads`: The number of processes to run MCTS on
 2. `--c`: The exploration factor for MCTS
