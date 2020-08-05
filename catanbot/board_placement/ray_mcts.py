@@ -45,42 +45,10 @@ class RayMCTS:
 
 			node_out = MCTSNode(None, None, self.simulator.turn, copy.deepcopy(board), copy.deepcopy(self.simulator.players), False, self.simulator)
 		else:
-			print('Reusing a node')
-			node_out = self.coalesce(search_results)
-			print('Saved {} rollouts'.format(node_out.stats.sum()))
+			node_out = search_results[0]
+			print('Reused {} rollouts'.format(node_out.stats.sum()))
 
 		self.root = node_out
-
-	def coalesce(self, nodes):
-		"""
-		Combine MCTS nodes with the same board state into one node.
-		"""
-		assert nodes, 'Recieved None or empty list'
-		out = nodes[0]
-		for node in nodes[1:]:
-			self.merge_trees(out, node)
-		return out
-
-	def merge_trees(self, t1, t2):
-		"""
-		Combines two search trees. Note that we can enforce an ordering on the children
-		We can simplify this by enforcing that we are merging trees at the same depth
-		If nodes same, merge statistics.
-		For children, pair off and recurse.
-		Guarantees correctness if root is same (it always will be for parallel MCTS, so make this a submethod of the driver class).
-		Note that this will replace t1 with the merge of t1 and t2.
-		"""
-		t1.stats += t2.stats
-		t1_dict = {n.parent_action: n for n in t1.children}	
-		t1_acts = set(t1_dict.keys()) #i don't think python will con constant time lookups for dict keys
-		for ch2 in t2.children:
-			p_act = ch2.parent_action
-			if p_act in t1_acts:
-				t1_dict[p_act] = merge_trees(t1_dict[p_act], ch2)
-			else:
-				t1.children.append(ch2)
-		
-		return t1	
 
 	def search(self, n_rollouts = None, max_time = None, c=1.0, verbose=False):
 		"""

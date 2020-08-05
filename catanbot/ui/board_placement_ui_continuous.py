@@ -2,7 +2,7 @@ import pygame
 import argparse
 import signal
 import copy
-from math import sin, cos, pi
+from math import sin, cos, pi, floor
 import matplotlib.pyplot as plt
 
 from catanbot.board import Board
@@ -28,10 +28,12 @@ class BoardPlacementUI:
 		self.mcts_button = Button(screen, (52, 210, 235), 'Run MCTS', (100, 675), (100, 50))
 		self.clear_mcts_button = Button(screen, (52, 210, 235), 'Clear MCTS Results', (225, 675), (175, 50))
 		self.show_prod_button = Button(screen, (52, 210, 235), 'Toggle Production Values', (425, 675), (225, 50))
+		self.place_button = Button(screen, (52, 210, 235), 'Place', (675, 675), (75, 50))
 
 		self.nthreads = nthreads
 		self.exploration = exploration
 		self.max_time = maxtime
+		self.turn_number = 0
 
 		self.agents = [HeuristicAgent(self.board), HeuristicAgent(self.board), HeuristicAgent(self.board), HeuristicAgent(self.board)]
 		s = CatanSimulator(board=self.board, players = self.agents, max_vp=8)
@@ -61,13 +63,22 @@ class BoardPlacementUI:
 				self.board.tiles[o_idx, 1] = self.board.tiles[o_idx, 1] + 1
 		elif o_code == 3:
 			#Edit a settlement
-			self.board.settlements[o_idx, 0] = (self.board.settlements[o_idx, 0] + 1) % 5
+			if self.board.settlements[o_idx, 0] == 0:
+				self.board.settlements[o_idx, 0] = self.get_player()
+			else:
+				#Don't remove other players' settlemetns
+				if self.board.settlements[o_idx, 0] == self.get_player():
+					self.board.settlements[o_idx, 0] = 0
+
 			if self.board.settlements[o_idx, 0] != 0:
 				self.board.settlements[o_idx, 1] = 1
 			else:
 				self.board.settlements[o_idx, 1] = 0
 		elif o_code == 4:
-			self.board.roads[o_idx, 0] = (self.board.roads[o_idx, 0] + 1) % 5
+			if self.board.roads[o_idx, 0] == 0:
+				self.board.roads[o_idx, 0] = self.get_player()
+			else:
+				self.board.roads[o_idx, 0] = 0
 
 		elif o_code == 5:
 			port = self.board.port_locations[o_idx]
@@ -89,16 +100,27 @@ class BoardPlacementUI:
 		if self.show_prod_button.collidepoint(event.pos):
 			self.renderer.show_prod = not self.renderer.show_prod
 
+		if self.place_button.collidepoint(event.pos):
+			if self.turn_number < 9:
+				self.turn_number += 1
+
+			#Update the mcts root, as the player has locked in the settlement
+			self.mcts.simulator.reset_from(self.board, self.agents)
+			self.mcts.update_root(self.board)
+
+	def get_player(self):
+		"""
+		Get current player from turn number
+		"""
+		return int(4 - floor(abs(3.5 - self.turn_number)))
+
 	def run_mcts(self):
 		"""
 		Sets up the backend to run MCTS. Also needs to ask the user for the time and c and threads to run mcts for and which player to run for, as we don't enforce valid board placements.
-		Returns info for the top 5 results and the search tree, which can be reused.
-		TODO: Make the MCTS object persistent with the UI and write a function that tree-searches given a board state so you can reuse the search tree.
+		Returns info for the top 5 results and updates the search tree
 		"""
 		self.mcts.sigstop = False
 		self.running_mcts = True
-		self.mcts.simulator.reset_from(self.board, self.agents)
-		self.mcts.update_root(self.board)
 
 		self.mcts.search(max_time=self.max_time, c=self.exploration, verbose=True)
 
@@ -135,6 +157,11 @@ class BoardPlacementUI:
 		self.mcts_button.render()
 		self.clear_mcts_button.render()
 		self.show_prod_button.render()
+		self.place_button.render()
+		font = pygame.font.SysFont(None, 24)
+		text = '{} to place'.format(['Nobody', 'Red', 'Green', 'Blue', 'Yellow'][self.get_player()])
+		img = font.render(text, True, (0, 0, 0))
+		self.screen.blit(img, (25, 25))
 		if self.mcts_results:
 			self.renderer.draw_mcts_results(self.board, self.mcts_results)
 
