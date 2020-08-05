@@ -11,7 +11,7 @@ A side project to use AI to give suggestions for initial placements in Settlers 
 2. `--c`: The exploration factor for MCTS
 3. `--max_time`: The maximum amount of time (in seconds) to let MCTS run. The MCTS is also interruptable with ^C. 
 
-You can cycle through resource tiles/values and ports by clicking on them. Clicking on a settlement spot or road spot will place a settlement/road there. Clicking again will cycle through each player. You can run MCTS for placements by clicking the 'Run MCTS' button. This will prompt the user for input in the terminal and will them run for the time specified. The top 5 choices are placed on the UI as arrows from the settlement spot in the direction of the road placement. You can also display the production (sum of the pips of adjacent hexes) with the 'Toggle Production Values' button.
+You can cycle through resource tiles/values and ports by clicking on them. Clicking on a settlement spot or road spot will place a settlement/road there. Clicking again will cycle through each player. You can run MCTS for placements by clicking the 'Run MCTS' button. This will prompt the user for input in the terminal and will them run for the time specified. The top 5 choices are placed on the UI as arrows from the settlement spot in the direction of the road placement. You can also display the production if each settlement spot (sum of the pips of adjacent hexes) with the 'Toggle Production Values' button.
 
 ## Status:
 1. Catan simulator: Mostly done - need to add dev cards, longest road/largest army, robber.
