@@ -63,6 +63,12 @@ class Board:
 		self.value_dist = np.array([2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12])
 		self.dev_dist = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 4, 4, 5, 5])
 		self.port_dist = np.array([1, 2, 3, 4, 5, 6, 6, 6, 6]) #6 for a 3:1 port	
+
+	def equals(self, b2):
+		"""
+		Two boards are equal if the tiles, settlements, ports, roads and dev cards are the same. (I don't want to override the built-in equals just in case).
+		"""
+		return np.array_equal(self.tiles, b2.tiles) and np.array_equal(self.roads, b2.roads) and np.array_equal(self.settlements, b2.settlements) and np.array_equal(self.dev_cards, b2.dev_cards)
 		
 	def reset(self):
 		tile_idxs = np.random.permutation(19)
@@ -235,7 +241,7 @@ class Board:
 		return table[int(i)]
 
 	def get_player_color(self, i):
-		table = ['k', 'r', 'g', 'y', 'b']
+		table = ['k', 'r', 'g', 'b', 'y']
 		return table[i]
 
 if __name__ == '__main__':

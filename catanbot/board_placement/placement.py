@@ -28,6 +28,45 @@ class MCTSNode:
 	def is_visited(self):
 		return self.stats.sum() > 0
 
+	def search_for(self, search_board):
+		"""
+		Search through this node and its children to find this board state. Return None if it doesn't exist.
+		Note that there can be multiple ways to reach the same board state. If there are multiple, we'll coalesce at the end.
+		"""
+		if self.board.equals(search_board):
+			return [self]
+
+		#If board is different, check children for a plausible solution, i.e. if their board is a subset of the search board.
+		search_children = []
+		for child in self.children:
+			#Check road and settlement occupancy.
+			child_s = child.board.settlements[:, 0]
+			search_s = search_board.settlements[:, 0]
+			child_city = child.board.settlements[:, 1]
+			search_city = search_board.settlements[:, 1]
+			child_r = child.board.roads[:, 0]
+			search_r = search_board.roads[:, 0]
+
+			#The child in invalid if:
+			#1. There's a different player than the search board in a spot
+			#2. There's any player where the search board has an empty spot
+			#3. There's a city where the search board doesn't have one
+
+			#Checks if any settlements in the child board conflict with the search board
+			check1 = np.any(child_s[child_s != 0] != search_s[child_s != 0])
+			#Check if any roads in the child board conflict
+			check2 = np.any(child_r[child_r != 0] != search_r[child_r != 0])
+			#Check if any cities exist where they shouldnt
+			check3 = np.any(child_city > search_city)
+
+			if not check1 and not check2 and not check3:
+				search_children.append(child)
+		results = []
+		for ch in search_children:
+			results.extend(ch.search_for(search_board))
+
+		return results
+
 	def expand(self, threshold=5):
 		"""
 		Expand all valid moves 

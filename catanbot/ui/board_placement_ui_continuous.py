@@ -1,5 +1,9 @@
 import pygame
+import argparse
+import signal
+import copy
 from math import sin, cos, pi
+import matplotlib.pyplot as plt
 
 from catanbot.board import Board
 from catanbot.ui.renderer import BoardRenderer
@@ -16,7 +20,7 @@ class BoardPlacementUI:
 
 	#Probably need some FSM to move through the clicks asynchronously.
 	"""
-	def __init__(self, screen):
+	def __init__(self, screen, nthreads, exploration, maxtime):
 		self.screen = screen
 		self.board = Board()
 		self.board.reset()
@@ -24,6 +28,20 @@ class BoardPlacementUI:
 		self.mcts_button = Button(screen, (52, 210, 235), 'Run MCTS', (100, 675), (100, 50))
 		self.clear_mcts_button = Button(screen, (52, 210, 235), 'Clear MCTS Results', (225, 675), (175, 50))
 		self.show_prod_button = Button(screen, (52, 210, 235), 'Toggle Production Values', (425, 675), (225, 50))
+
+		self.nthreads = nthreads
+		self.exploration = exploration
+		self.max_time = maxtime
+
+		self.agents = [HeuristicAgent(self.board), HeuristicAgent(self.board), HeuristicAgent(self.board), HeuristicAgent(self.board)]
+		s = CatanSimulator(board=self.board, players = self.agents, max_vp=8)
+		s.reset_from(self.board, self.agents)
+
+		mcts = RayMCTS(s, n_samples=1, n_threads=self.nthreads)
+		mcts.root.turn_number = 0
+		self.mcts = mcts
+		self.running_mcts = False
+
 		self.mcts_results = None
 
 	def handle_click(self, event):
@@ -74,33 +92,43 @@ class BoardPlacementUI:
 	def run_mcts(self):
 		"""
 		Sets up the backend to run MCTS. Also needs to ask the user for the time and c and threads to run mcts for and which player to run for, as we don't enforce valid board placements.
+		Returns info for the top 5 results and the search tree, which can be reused.
+		TODO: Make the MCTS object persistent with the UI and write a function that tree-searches given a board state so you can reuse the search tree.
 		"""
-		#I'm too lazy to set up tkinter dialog boxes.
-		tmax = int(input('Input how long to run MCTS (in seconds):\n'))
-		c = float(input('Input exploration factor for MCTS (default is 1):\n'))
-		n_threads = int(input('Input number of threads to use (12-16 was best for me):\n'))
-		turn_number = int(self.board.settlements[:, 1].clip(0, 1).sum())
-		agents = [HeuristicAgent(self.board), HeuristicAgent(self.board), HeuristicAgent(self.board), HeuristicAgent(self.board)]
-		s = CatanSimulator(board=self.board, players = agents, max_vp=8)
-		s.reset_from(self.board, agents)
+		self.mcts.sigstop = False
+		self.running_mcts = True
+		self.mcts.simulator.reset_from(self.board, self.agents)
+		self.mcts.update_root(self.board)
 
+		self.mcts.search(max_time=self.max_time, c=self.exploration, verbose=True)
 
-		mcts = RayMCTS(s, n_samples=1, n_threads=n_threads)
-		mcts.root.turn_number = turn_number
-		mcts.search(max_time=tmax, c=c, verbose=True)
-		print(mcts.dump(mcts.root, 0, c=0))
+		self.running_mcts = False
+
+		print(self.mcts.dump(self.mcts.root, 0, c=0))
+		return self.get_top5()
+
+	def get_top5(self):
 		print('_-' * 100, end='\n\n')
-		acts = mcts.get_optimal_path()
+		acts = self.mcts.get_optimal_path()
 		print('_'*20, 'OPTIMAL PATH', '_'*20)
 		for n in acts:
 			print(n.__repr__(c=0))
 
-		topk = mcts.get_top_k()	
+		topk = self.mcts.get_top_k()	
 		print('_'*20, 'TOP 5', '_'*20)
 		for k in topk:
 			print('Settlement = {}, Road = {}, Win Rate = {:.4f}, Stats = {}'.format(k[0].parent_action, k[1].parent_action, k[2], k[1].stats))
 		
 		return topk
+
+	def handle_stop(self, sig, frame):
+		if self.running_mcts:
+			self.mcts.sigstop = True
+			self.running_mcts = False
+			print('Stopping MCTS ...')
+		else:
+			print('Exiting program...')
+			exit(0)
 		
 	def render(self):
 		self.renderer.render(self.board)
@@ -111,12 +139,19 @@ class BoardPlacementUI:
 			self.renderer.draw_mcts_results(self.board, self.mcts_results)
 
 if __name__ == '__main__':
+	parser = argparse.ArgumentParser(description = 'Args for MCTS')
+	parser.add_argument('--nthreads', type=int, required=False, default=1, help='The number of processes to use for the tree search')
+	parser.add_argument('--c', type=float, required = False, default=1.0, help='Exploration factor for MCTS (1.0 default, more=more exploration, less=more exploitation)')
+	parser.add_argument('--max_time', type=float, required = False, default=300.0, help='Optional max time to run MCTS for')
+	args = parser.parse_args()
 	pygame.init()
 
 	# Set up the drawing window
 	screen = pygame.display.set_mode([900, 800])
 	pygame.display.set_caption('Catan Placement Assist')
-	ui = BoardPlacementUI(screen)
+
+	ui = BoardPlacementUI(screen, nthreads = args.nthreads, exploration = args.c, maxtime = args.max_time)
+	signal.signal(signal.SIGINT, ui.handle_stop)
 
 	# Run until the user asks to quit
 	running = True
