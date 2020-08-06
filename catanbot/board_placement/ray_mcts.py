@@ -46,7 +46,7 @@ class RayMCTS:
 			node_out = MCTSNode(None, None, self.simulator.turn, copy.deepcopy(board), copy.deepcopy(self.simulator.players), False, self.simulator)
 		else:
 			node_out = search_results[0]
-			print('Reused {} rollouts'.format(node_out.stats.sum()))
+			print('Reused {} rollouts {}'.format(node_out.stats.sum(), node_out.stats))
 
 		self.root = node_out
 
@@ -110,7 +110,7 @@ class RayMCTS:
 						leaf = leaf.parent
 
 			if verbose:
-				print('Rollout #{} (t={:.2f}s) time elapsed = {:.2f}s, time remaining = {:.2f}s rollout/expand time = {:.2f}'.format(r, t_itr, t_running, t_remaining, parallel_time))
+				print('Rollout #{} (t={:.2f}s) time elapsed = {:.2f}s, time remaining = {:.2f}s rollout/expand time = {:.2f}'.format(r * self.n_samples, t_itr, t_running, t_remaining, parallel_time))
 				best = self.get_optimal_path()
 				best = [n.parent_action for n in best[1:]]
 				print('best = {}'.format(best))

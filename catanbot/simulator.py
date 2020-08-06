@@ -37,10 +37,14 @@ class CatanSimulator:
 		simulates a full game and returns the winner
 		"""
 		while not self.terminal:
+			ts = time.time()
 			act = self.players[self.turn].action()
+			ta = time.time()
 			if verbose:
 				print('Act = {}'.format(act))
 			self.step(act)
+			te = time.time()
+
 		return (self.vp == self.max_vp).astype(int)
 	
 	@property
@@ -110,10 +114,13 @@ class CatanSimulator:
 		self.knights_played = np.zeros(4, dtype=int)
 		self.largest_army_pidx = -1
 
-	def step(self, action):
+	def step(self, action, check = False):
 		pval = self.turn + 1
-		avail_actions = self.compute_actions(self.turn)
-		assert (action == avail_actions).all(axis=1).any(), 'invalid move'
+
+		#Checking actions is expensive. Avoid for simulation if necessary
+		if check:
+			avail_actions = self.compute_actions(self.turn)
+			assert (action == avail_actions).all(axis=1).any(), 'invalid move'
 		atype = action[0]
 		aloc = action[1]
 		acost = action[2:]

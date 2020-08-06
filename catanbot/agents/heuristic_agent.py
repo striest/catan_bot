@@ -55,7 +55,16 @@ class HeuristicAgent(Agent):
 		avail_spots = self.board.compute_settlement_spots()
 		placed_roads = self.board.roads[self.board.roads[:, 0] == 1+self.pidx]
 		build_spots = placed_roads[:, [1, 2]].flatten()
-		if (acts[:, 0] == 3).any() and np.intersect1d(build_spots, avail_spots).size == 0:
+
+		#From Szita et al., build a road with probability 10/10^R, R = #roads/(#settlements + #cities)
+
+		nroads = placed_roads.shape[0]
+		nsettlements = self.board.settlements[self.board.settlements[:, 0] == 1+self.pidx].shape[0]
+
+		road_ratio = nroads/nsettlements
+		road_prob = 10 / (10 ** road_ratio)
+
+		if (acts[:, 0] == 3).any() and random.random() < road_prob:
 			racts = acts[acts[:, 0] == 3]
 			rlocs = racts[:, 1]
 

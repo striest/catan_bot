@@ -1,3 +1,5 @@
+import time
+
 import matplotlib.pyplot as plt
 import numpy as np
 import random
@@ -17,6 +19,14 @@ class Agent:
 		play a dev card
 		I think it's safe to implement actions as play dev and then purchase.
 	"""
+
+#	devtime = 0
+#	settime = 0
+#	cittime = 0
+#	roadtime = 0
+#	road1time = 0
+#	road2time = 0
+#	totaltime = 0
 
 	def __init__(self, board):
 		self.board = board
@@ -62,10 +72,12 @@ class Agent:
 
 		costs = np.stack([self.trade_for(r) for r in (DEV, SETTLEMENT, CITY, ROAD)], axis=0)
 
+#		devt = time.time()
 		#Compute dev card
 		if (self.resources - costs[0] >= 0).all() and self.board.has_dev_cards():
 			moves.append(np.concatenate([np.array([0, 0]), costs[0]], axis=0))
 
+#		sett = time.time()
 		#Compute settlements
 		if (self.resources - costs[1] >= 0).all() and self.board.count_settlements_for(self.pidx+1) < 5:
 			avail_spots = self.board.compute_settlement_spots()
@@ -74,22 +86,61 @@ class Agent:
 			for spot in valid_spots:
 				moves.append(np.concatenate([np.array([1, spot]), costs[1]], axis=0))
 
+#		citt = time.time()
 		#Compute cities
 		if (self.resources - costs[2] >= 0).all() and self.board.count_cities_for(self.pidx+1) < 4:
 			spots = np.argwhere((self.board.settlements[:, 0] == 1+self.pidx) & (self.board.settlements[:, 1] == 1)).flatten()
 			for spot in spots:
 				moves.append(np.concatenate([np.array([2, spot]), costs[2]], axis=0))
 
+#		roadt = time.time()
 		#Compute roads
 		if (self.resources - costs[3] >= 0).all() and self.board.count_roads_for(self.pidx+1) < 15:
-			road_spots = np.argwhere(self.board.roads[:, 0] == 1 + self.pidx).flatten()
-			settlement_spots = np.concatenate([np.argwhere((self.board.settlements[:, 5:8] == r).any(axis=1)) for r in road_spots]).flatten()
-			one_hop_road_spots = np.concatenate([np.argwhere((self.board.roads[:, 1:3] == s).any(axis=1)) for s in settlement_spots]).flatten()
-			avail_road_spots = np.argwhere(self.board.roads[:, 0] == 0).flatten()
-			valid_road_spots = np.intersect1d(avail_road_spots, one_hop_road_spots)
+#			r1t = time.time()
+#			road_spots = np.argwhere(self.board.roads[:, 0] == 1 + self.pidx).flatten()
+#			settlement_spots = np.concatenate([np.argwhere((self.board.settlements[:, 5:8] == r).any(axis=1)) for r in road_spots]).flatten()
+#			one_hop_road_spots = np.concatenate([np.argwhere((self.board.roads[:, 1:3] == s).any(axis=1)) for s in settlement_spots]).flatten()
+#			avail_road_spots = np.argwhere(self.board.roads[:, 0] == 0).flatten()
+#			valid_road_spots = np.intersect1d(avail_road_spots, one_hop_road_spots)
+
+			#The non-numpy way runs faster.
+			road_spots = set()
+			settlement_spots = set()
+			for ridx, road in enumerate(self.board.roads):
+				if road[0] == 1 + self.pidx:
+					road_spots.add(ridx)
+					s1id = self.board.settlements[road[1], 0]
+					s2id = self.board.settlements[road[2], 0]
+					if s1id == 0 or s1id == 1 + self.pidx:
+						settlement_spots.add(road[1])
+					if s2id == 0 or s2id == 1 + self.pidx:
+						settlement_spots.add(road[2])
+
+			valid_road_spots = []
+			for ridx, road in enumerate(self.board.roads):
+				if road[0] == 0 and (road[1] in settlement_spots or road[2] in settlement_spots):
+					valid_road_spots.append(ridx)
 
 			for spot in valid_road_spots:
 				moves.append(np.concatenate([np.array([3, spot]), costs[3]], axis=0))
+
+
+#			print('{} CAN BUILD ROADS'.format('RGBY'[self.pidx]))
+#			print(valid_road_spots)
+#			self.board.render();plt.show()
+		else:	
+			r1t = time.time()
+
+#		et = time.time()
+
+#		Agent.devtime += sett - devt 
+#		Agent.settime += citt - sett 
+#		Agent.cittime += roadt - citt 
+#		Agent.roadtime += et - roadt 
+#		Agent.road1time += r1t - roadt
+#		Agent.road2time += et - r1t
+#		Agent.totaltime += et - devt
+#		print('DEV = {:.7f}, SET = {:.7f}, CIT = {:.7f}, ROAD = {:.7f} ROAD1 = {:.7f} ROAD2 = {:.7f} TOTAL = {:.7f}'.format(Agent.devtime, Agent.settime, Agent.cittime, Agent.roadtime, Agent.road1time, Agent.road2time, Agent.totaltime))
 
 		return np.stack(moves, axis=0)
 	
