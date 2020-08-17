@@ -43,8 +43,68 @@ class BoardPlacementUI:
 		mcts.root.turn_number = 0
 		self.mcts = mcts
 		self.running_mcts = False
-
 		self.mcts_results = None
+
+		self.keystroke_buf = ''
+		self.edit_hex_idx = -1
+		self.rchr_to_rval = {
+			'd': 0,
+			'o': 1,
+			'w': 2,
+			's': 3,
+			'l': 4, 
+			'b': 5,
+		}
+		self.edit_port_idx = -1
+		self.pchr_to_pval = {
+			'o': 1,
+			'w': 2,
+			's': 3,
+			'l': 4,
+			'b': 5,
+			'a': 6
+		}
+
+	def handle_keystroke(self, event):
+		try:
+			c = chr(event.key)
+			if c.isalnum():
+				self.keystroke_buf += c.lower()
+		except:
+			print('not ascii')
+
+		if len(self.keystroke_buf) >= 2 and len(self.keystroke_buf) <= 3 and self.keystroke_buf[-1].isalpha() and self.keystroke_buf[:-1].isnumeric() and self.edit_hex_idx >= 0:
+			rchr = self.keystroke_buf[-1]
+			if rchr in self.rchr_to_rval.keys():
+				rtype = self.rchr_to_rval[rchr]
+				rval = int(self.keystroke_buf[:-1])
+				if (rval == 0 and rtype == 0) or (rval >= 2 and rval <= 12 and rval != 7):
+					#At this point, we have a valid hex string
+					print(self.edit_hex_idx, rtype, rval)
+					self.board.tiles[self.edit_hex_idx, 0] = rtype
+					self.board.tiles[self.edit_hex_idx, 1] = rval
+					self.keystroke_buf = ''
+				else:
+					print('resource number invalid')
+			else:
+				print('hex type invalid (d=desert, o=ore, w=wheat, s=sheep, l=wood(lumber), b=brick)')
+		else:
+			print('invalid hex string')
+
+		if len(self.keystroke_buf) == 1 and self.edit_port_idx >= 0:
+			pchr = self.keystroke_buf[0]
+			if pchr in self.pchr_to_pval.keys():
+				ptype = self.pchr_to_pval[pchr]
+				port = self.board.port_locations[self.edit_port_idx]
+				s1 = port[0]
+				s2 = port[1]
+				self.board.settlements[s1, 2] = ptype
+				self.board.settlements[s2, 2] = ptype
+				self.keystroke_buf = ''
+			else:
+				print('port type invalid. (a=any (3 for 1), o=ore, w=wheat, s=sheep, l=wood(lumber), b=brick)')
+		else:
+			print('invalid port char')
 
 	def handle_click(self, event):
 		print('_' * 50)
@@ -52,15 +112,23 @@ class BoardPlacementUI:
 		print('Board coordinate = {}'.format(self.renderer.inv_scale_fn(event.pos)))
 		o_code, o_idx = self.renderer.get_object(self.board, self.renderer.inv_scale_fn(event.pos))
 
-		if o_code == 1:
-			#Edit a hex
-			self.board.tiles[o_idx, 0] = (self.board.tiles[o_idx, 0] + 1) % 6
-		elif o_code == 2:
-			#Edit a token
-			self.board.tiles[o_idx, 1] = (self.board.tiles[o_idx, 1] + 1) % 13
-			if self.board.tiles[o_idx, 1] == 7 or self.board.tiles[o_idx, 1] == 1:
-				#There's no 1 or 7 token
-				self.board.tiles[o_idx, 1] = self.board.tiles[o_idx, 1] + 1
+		if o_code == 1 or o_code == 2:
+			if self.edit_hex_idx == o_idx:
+				self.edit_hex_idx = -1
+			else:
+				self.edit_hex_idx = o_idx
+			self.keystroke_buf = ''
+			self.edit_port_idx = -1
+
+#		if o_code == 1:
+#			#Edit a hex
+#			self.board.tiles[o_idx, 0] = (self.board.tiles[o_idx, 0] + 1) % 6
+#		elif o_code == 2:
+#			#Edit a token
+#			self.board.tiles[o_idx, 1] = (self.board.tiles[o_idx, 1] + 1) % 13
+#			if self.board.tiles[o_idx, 1] == 7 or self.board.tiles[o_idx, 1] == 1:
+#				#There's no 1 or 7 token
+#				self.board.tiles[o_idx, 1] = self.board.tiles[o_idx, 1] + 1
 		elif o_code == 3:
 			#Edit a settlement
 			if self.board.settlements[o_idx, 0] == 0:
@@ -74,21 +142,24 @@ class BoardPlacementUI:
 				self.board.settlements[o_idx, 1] = 1
 			else:
 				self.board.settlements[o_idx, 1] = 0
+			self.edit_hex_idx = -1
+			self.edit_port_idx = -1
+
 		elif o_code == 4:
 			if self.board.roads[o_idx, 0] == 0:
 				self.board.roads[o_idx, 0] = self.get_player()
 			else:
 				self.board.roads[o_idx, 0] = 0
+			self.edit_hex_idx = -1
+			self.edit_port_idx = -1
 
 		elif o_code == 5:
-			port = self.board.port_locations[o_idx]
-			s1 = port[0]
-			s2 = port[1]
-			r_new = (self.board.settlements[s1, 2] + 1) % 7
-			if r_new == 0:
-				r_new += 1
-			self.board.settlements[s1, 2] = r_new
-			self.board.settlements[s2, 2] = r_new
+			self.edit_hex_idx = -1
+			self.keystroke_buf = ''
+			if self.edit_port_idx == o_idx:
+				self.edit_port_idx = -1
+			else:
+				self.edit_port_idx = o_idx
 
 		if self.mcts_button.collidepoint(event.pos):
 			topk = self.run_mcts()
@@ -154,6 +225,10 @@ class BoardPlacementUI:
 		
 	def render(self):
 		self.renderer.render(self.board)
+		if self.edit_hex_idx >= 0:
+			self.renderer.highlight_tile(self.board.tiles[self.edit_hex_idx])
+		if self.edit_port_idx >= 0:
+			self.renderer.highlight_port(self.board, self.board.port_locations[self.edit_port_idx])
 		self.mcts_button.render()
 		self.clear_mcts_button.render()
 		self.show_prod_button.render()
@@ -187,6 +262,9 @@ if __name__ == '__main__':
 		for event in pygame.event.get():
 			if event.type == pygame.MOUSEBUTTONUP:
 				ui.handle_click(event)
+			if event.type == pygame.KEYDOWN:
+				ui.handle_keystroke(event)
+				print(ui.keystroke_buf)
 			if event.type == pygame.QUIT:
 				running = False
 

@@ -71,6 +71,35 @@ class BoardRenderer:
 		self.draw_settlements(board)
 		self.draw_ports(board)
 
+	def highlight_tile(self, tile):
+		"""
+		Highlight a tile
+		"""
+		resource = tile[0]
+		die = tile[1]
+		x_pos, y_pos = self.scale_fn((tile[2], tile[3]))
+			
+		hex_img = self.draw_hex(self.screen, (255, 255, 0), (x_pos, y_pos), self.scale_fn(self.HEX_RADIUS + 0.6), rot = pi/6)
+		hex_img = self.draw_hex(self.screen, (0, 0, 0), (x_pos, y_pos), self.scale_fn(self.HEX_RADIUS + 0.2), rot = pi/6)
+		hex_img = self.draw_hex(self.screen, (255, 255, 255), (x_pos, y_pos), self.scale_fn(self.HEX_RADIUS), rot = pi/6)
+		img = pygame.image.load(self.tile_imgs[resource])
+		img = pygame.transform.scale(img, hex_img.size)
+		self.screen.blit(img, (x_pos - hex_img.width/2, y_pos - hex_img.height/2))
+		self.draw_token(self.screen, (x_pos, y_pos), self.scale_fn(self.TOKEN_RADIUS), die)
+
+	def highlight_port(self, board, port):
+		s1 = port[0]
+		s2 = port[1]
+		port_type = board.settlements[s1, 2]
+		assert port_type == board.settlements[s2, 2], 'Sam messed up the eventing for port cycling'
+		x_pos, y_pos = self.scale_fn((port[2], port[3]))
+
+		port = pygame.draw.rect(self.screen, (255, 255, 0), pygame.Rect(x_pos - self.scale_fn(self.PORT_WIDTH/2 + 0.1), y_pos - self.scale_fn(self.PORT_HEIGHT/2 + 0.1), self.scale_fn(self.PORT_WIDTH+0.2), self.scale_fn(self.PORT_HEIGHT+0.2)))
+		port = pygame.draw.rect(self.screen, (255, 255, 255), pygame.Rect(x_pos - self.scale_fn(self.PORT_WIDTH/2), y_pos - self.scale_fn(self.PORT_HEIGHT/2), self.scale_fn(self.PORT_WIDTH), self.scale_fn(self.PORT_HEIGHT)))
+		img = pygame.image.load(self.port_imgs[port_type])
+		img = pygame.transform.scale(img, port.size)
+		self.screen.blit(img, (x_pos - port.width/2, y_pos - port.height/2))
+
 	def draw_mcts_results(self, board, results):
 		for rank, result in enumerate(results):
 			s_node, r_node, win_rate = result
