@@ -1,4 +1,5 @@
 import pygame
+import time
 import argparse
 import signal
 import copy
@@ -10,6 +11,7 @@ from catanbot.ui.renderer import BoardRenderer
 from catanbot.ui.button import Button
 
 from catanbot.agents.heuristic_agent import HeuristicAgent
+from catanbot.agents.base import Agent
 from catanbot.simulator import CatanSimulator
 from catanbot.board_placement.placement import MCTSSearch, MCTSNode
 from catanbot.board_placement.ray_mcts import RayMCTS
@@ -20,17 +22,19 @@ class BoardPlacementUI:
 
 	#Probably need some FSM to move through the clicks asynchronously.
 	"""
-	def __init__(self, screen, nthreads, exploration, maxtime):
+	def __init__(self, screen, nthreads, nsamples, exploration, maxtime):
 		self.screen = screen
 		self.board = Board()
 		self.board.reset()
 		self.renderer = BoardRenderer(screen)
-		self.mcts_button = Button(screen, (52, 210, 235), 'Run MCTS', (100, 675), (100, 50))
-		self.clear_mcts_button = Button(screen, (52, 210, 235), 'Clear MCTS Results', (225, 675), (175, 50))
-		self.show_prod_button = Button(screen, (52, 210, 235), 'Toggle Production Values', (425, 675), (225, 50))
-		self.place_button = Button(screen, (52, 210, 235), 'Place', (675, 675), (75, 50))
+		self.mcts_button = Button(screen, (52, 210, 235), 'Run MCTS', (50, 675), (100, 50))
+		self.clear_mcts_button = Button(screen, (52, 210, 235), 'Clear MCTS Results', (175, 675), (175, 50))
+		self.show_prod_button = Button(screen, (52, 210, 235), 'Toggle Production Values', (375, 675), (225, 50))
+		self.place_button = Button(screen, (52, 210, 235), 'Place', (625, 675), (75, 50))
+		self.randomize_button = Button(screen, (52, 210, 235), 'Randomize', (725, 675), (125, 50))
 
 		self.nthreads = nthreads
+		self.nsamples = nsamples
 		self.exploration = exploration
 		self.max_time = maxtime
 		self.turn_number = 0
@@ -39,7 +43,7 @@ class BoardPlacementUI:
 		s = CatanSimulator(board=self.board, players = self.agents, max_vp=10)
 		s.reset_from(self.board, self.agents)
 
-		mcts = RayMCTS(s, n_samples=1, n_threads=self.nthreads)
+		mcts = RayMCTS(s, n_samples=self.nsamples, n_threads=self.nthreads)
 		mcts.root.turn_number = 0
 		self.mcts = mcts
 		self.running_mcts = False
@@ -179,6 +183,15 @@ class BoardPlacementUI:
 			self.mcts.simulator.reset_from(self.board, self.agents)
 			self.mcts.update_root(self.board)
 
+		if self.randomize_button.collidepoint(event.pos):
+			self.board.reset()
+			self.mcts.simulator.reset_from(self.board, self.agents)
+			self.mcts.update_root(self.board)
+			self.mcts.root.turn_number = 0
+			self.running_mcts = False
+
+			self.mcts_results = None
+
 	def get_player(self):
 		"""
 		Get current player from turn number
@@ -233,6 +246,7 @@ class BoardPlacementUI:
 		self.clear_mcts_button.render()
 		self.show_prod_button.render()
 		self.place_button.render()
+		self.randomize_button.render()
 		font = pygame.font.SysFont(None, 24)
 		text = '{} to place'.format(['Nobody', 'Red', 'Green', 'Blue', 'Yellow'][self.get_player()])
 		img = font.render(text, True, (0, 0, 0))
@@ -243,6 +257,7 @@ class BoardPlacementUI:
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description = 'Args for MCTS')
 	parser.add_argument('--nthreads', type=int, required=False, default=1, help='The number of processes to use for the tree search')
+	parser.add_argument('--nsamples', type=int, required=False, default=1, help='The number of games to play at each rollout')
 	parser.add_argument('--c', type=float, required = False, default=1.0, help='Exploration factor for MCTS (1.0 default, more=more exploration, less=more exploitation)')
 	parser.add_argument('--max_time', type=float, required = False, default=300.0, help='Optional max time to run MCTS for')
 	args = parser.parse_args()
@@ -252,7 +267,7 @@ if __name__ == '__main__':
 	screen = pygame.display.set_mode([900, 800])
 	pygame.display.set_caption('Catan Placement Assist')
 
-	ui = BoardPlacementUI(screen, nthreads = args.nthreads, exploration = args.c, maxtime = args.max_time)
+	ui = BoardPlacementUI(screen, nthreads = args.nthreads, nsamples = args.nsamples, exploration = args.c, maxtime = args.max_time)
 	signal.signal(signal.SIGINT, ui.handle_stop)
 
 	# Run until the user asks to quit
@@ -271,6 +286,7 @@ if __name__ == '__main__':
 		# Flip the display
 		pygame.display.flip()
 		ui.render()
+		time.sleep(0.1)
 
 
 	# Done! Time to quit.

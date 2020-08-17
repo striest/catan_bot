@@ -78,6 +78,7 @@ class Board:
 		port_idxs = np.random.permutation(9)
 		self.tiles[:, 0] = self.tile_dist[tile_idxs]
 		self.tiles[:, 1][self.tiles[:, 0] != 0] = self.value_dist[value_idxs]
+		self.tiles[:, 1][self.tiles[:, 0] == 0] = 0
 		self.roads[:, 0] *= 0
 		self.settlements[:, [0, 1, 2]] *= 0
 		self.dev_cards = self.dev_dist[dev_idxs]

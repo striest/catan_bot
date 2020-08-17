@@ -153,10 +153,14 @@ class MCTSNode:
 			pidx = self.player_from_turn(turn)
 			avail = rollout_board.compute_settlement_spots()
 			prod = self.board.compute_production()
-			prod = prod[prod[:, 1] > 7]
+			prod = prod[prod[:, 1] > 9]
+			prod2 = prod[prod[:, 1] > 6]
 			good = np.intersect1d(avail, prod[:, 0])
+			good2 = np.intersect1d(avail, prod2[:, 0])
 			if good.size > 0:
 				s = np.random.choice(good)
+			if good2.size > 0:
+				s = np.random.choice(good2)
 			else:
 				s = np.random.choice(avail)
 #			print(good, s)
@@ -214,6 +218,9 @@ class MCTSSearch:
 		r = 0
 		t_running = 0
 		r_t_running = 0
+
+		ptime = 0
+		rtime = 0
 		while r < n_rollouts and t_running < max_time:
 		#	print(self)
 			t_itr = time.time()-prev
@@ -225,7 +232,7 @@ class MCTSSearch:
 			maxdepth = (curr.turn_number == 8 and not curr.is_road)
 #			print(curr)
 			if verbose:
-				print('Rollout #{} (t={:.2f}s) time elapsed = {:.2f}s, time remaining = {:.2f}s rollout time = {:.2f}'.format(r, t_itr, t_running, t_remaining, r_t_running))
+				print('Rollout #{} (t={:.2f}s) time elapsed = {:.2f}s, time remaining = {:.2f}s rollout time = {:.2f}, place time = {:.2f}, simulate time {:.2f}'.format(r * self.n_samples, t_itr, t_running, t_remaining, r_t_running, ptime, rtime))
 				print('depth = {}, path = {}'.format(curr.turn_number, path))
 				if maxdepth:
 					print('max depth')
@@ -234,7 +241,9 @@ class MCTSSearch:
 				curr.children = ch
 			else:
 				rtstart = time.time()
-				result = curr.rollout(n_times = self.n_samples)
+				result, place_time, rollout_time = curr.rollout(n_times = self.n_samples)
+				ptime += place_time
+				rtime += rollout_time
 				r_t_running += (time.time() - rtstart)
 				r += self.n_samples
 				while curr:
@@ -302,8 +311,8 @@ if __name__ == '__main__':
 
 	search = MCTSSearch(s, n_samples=1)	
 	search.search(max_time=30, c=0.5, verbose=True)
-	print(search.dump(search.root, 0, c=0))
-	print('_-' * 100, end='\n\n')
+#	print(search.dump(search.root, 0, c=0))
+#	print('_-' * 100, end='\n\n')
 	acts = search.get_optimal_path()
 	for n in acts:
 		print(n.__repr__(c=0))
@@ -312,5 +321,5 @@ if __name__ == '__main__':
 				b.place_settlement(n.parent_action, n.player_from_turn(n.turn_number), False)
 			else:
 				b.place_road(n.parent_action, n.player_from_turn(n.turn_number))
-	b.render()
-	plt.show()
+#	b.render()
+#	plt.show()
