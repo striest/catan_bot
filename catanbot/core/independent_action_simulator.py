@@ -3,11 +3,11 @@ import numpy as np
 import random
 import time
 
-from catanbot.board import Board
+from catanbot.core.board import Board
 from catanbot.agents.base import Agent
-from catanbot.agents.heuristic_agent import HeuristicAgent
+from catanbot.agents.independent_actions_agents import IndependentActionsHeuristicAgent, IndependentActionsAgent
 from catanbot.constants import DEV, SETTLEMENT, CITY, ROAD
-from catanbot.simulator import CatanSimulator
+from catanbot.core.simulator import CatanSimulator
 
 class IndependentActionsCatanSimulator(CatanSimulator):
     """
@@ -20,7 +20,7 @@ class IndependentActionsCatanSimulator(CatanSimulator):
         """
         Returns all valid locations to player at pidx to build a settlement, and its cost.
         """
-        print('computing settlements...')
+#        print('computing settlements...')
         player = self.players[pidx]
         cost = self.trade_for(pidx, SETTLEMENT)
         if (player.resources - cost >= 0).all() and self.board.count_settlements_for(pidx+1) < 5:
@@ -37,7 +37,7 @@ class IndependentActionsCatanSimulator(CatanSimulator):
         """
         Returns all the valid locations for player at pidx to build a city, and its cost.
         """
-        print('computing cities...')
+#        print('computing cities...')
         player = self.players[pidx]
         cost = self.trade_for(pidx, CITY)
         if (player.resources - cost >= 0).all() and self.board.count_cities_for(pidx+1) < 4:
@@ -52,7 +52,7 @@ class IndependentActionsCatanSimulator(CatanSimulator):
         """
         Returns all valid locations for player pidx to build a road, and the associated resource cost.
         """
-        print('computing roads...')
+#        print('computing roads...')
         player = self.players[pidx]
         cost = self.trade_for(pidx, ROAD)
         if (player.resources - cost >= 0).all() and self.board.count_roads_for(pidx+1) < 15:
@@ -73,7 +73,7 @@ class IndependentActionsCatanSimulator(CatanSimulator):
         """
         Returns whether it's valid for player pidx to buy a dev card and its associated cost.
         """
-        print('computing devs...')
+#        print('computing devs...')
         player = self.players[pidx]
         cost = self.trade_for(pidx, DEV)
         if (player.resources - cost >= 0).all() and self.board.has_dev_cards():
@@ -102,13 +102,15 @@ class IndependentActionsCatanSimulator(CatanSimulator):
         curr_spot = np.argmax(self.board.tiles[:, 4])
         options = np.argsort(robber_act)
         options = options[options != curr_spot]
+
         if not force:
             options = options[robber_act[options] > thr]
+
         if options.size == 0:
             return False
         else:
-            print('moved robber')
-            self.board.place_robber(options[0])
+#            print('moved robber')
+            self.board.place_robber(options[-1])
             return True
 
     def city_act(self, pidx, city_act, build_locs, cost, city, thr=0.5):
@@ -129,7 +131,7 @@ class IndependentActionsCatanSimulator(CatanSimulator):
         scores = city_act[valid_idxs]
         prefs = np.argsort(-scores) #Sort descending
         if scores[prefs[0]] > thr:
-            print('bought {}'.format('city' if city else 'settlement'))
+#            print('bought {}'.format('city' if city else 'settlement'))
             self.board.place_settlement(valid_idxs[prefs[0]], pidx+1, city)
             self.players[pidx].resources -= cost
             self.vp[pidx] += 1
@@ -155,7 +157,7 @@ class IndependentActionsCatanSimulator(CatanSimulator):
         scores = road_act[valid_idxs]
         prefs = np.argsort(-scores) #Sort descending
         if scores[prefs[0]] > thr:
-            print('bought road')
+#            print('bought road')
             self.board.place_road(valid_idxs[prefs[0]], pidx+1)
             self.players[pidx].resources -= cost
             return True
@@ -169,7 +171,7 @@ class IndependentActionsCatanSimulator(CatanSimulator):
         if dev_act < thr:
             return False
         else:
-            print('bought dev card')
+#            print('bought dev card')
             self.players[pidx].resources -= cost
 
             card = self.board.get_dev_card()
@@ -218,7 +220,7 @@ class IndependentActionsCatanSimulator(CatanSimulator):
 
         #PHASE 2: Assign resources
         roll = self.assign_resources()
-        print('Roll = {}'.format(roll))
+#        print('Roll = {}'.format(roll))
 
         #PHASE 3: Move robber if 7.
         if roll == 7:
@@ -267,8 +269,9 @@ class IndependentActionsCatanSimulator(CatanSimulator):
 if __name__ == '__main__':
     import copy
     b = Board()
-    agents = [HeuristicAgent(b), Agent(b), Agent(b), Agent(b)]
-    agents = [HeuristicAgent(b), HeuristicAgent(b), HeuristicAgent(b), HeuristicAgent(b)]
+    agents = [IndependentActionsAgent(b), IndependentActionsAgent(b), IndependentActionsHeuristicAgent(b), IndependentActionsAgent(b)]
+#    agents = [IndependentActionsHeuristicAgent(b), IndependentActionsHeuristicAgent(b), IndependentActionsHeuristicAgent(b), IndependentActionsHeuristicAgent(b)]
+#    agents = [HeuristicAgent(b), HeuristicAgent(b), HeuristicAgent(b), HeuristicAgent(b)]
     s = IndependentActionsCatanSimulator(board=b, players = agents, max_vp=10)
     s.reset_with_initial_placements()
     s_c = copy.deepcopy(s)
@@ -278,7 +281,7 @@ if __name__ == '__main__':
 
     t = time.time()
     cnt = 0
-    games = 50
+    games = 500
     turns = 0
     wins = np.zeros(4)
 #    print(s.simulate())
@@ -290,18 +293,12 @@ if __name__ == '__main__':
         print('Turn = {}, ({})'.format(s.nsteps+1, 'RGBY'[s.turn]))
         print('Resources = {}'.format(s.players[s.turn].resources))
         act = s.players[s.turn].action()
-        act = {
-            'settlements':np.random.rand(54),
-            'roads':np.random.rand(72),
-            'dev':np.random.rand(1),
-            'tiles':np.random.rand(19)
-        }
         print('Act = {}'.format(act))
         s.step(act)
 
         if s.terminal:
-            print(s.observation)
-            s.render()
+#            print(s.observation)
+#            s.render()
             wins[np.argmax(s.vp)] += 1
             turns += s.nsteps
             s.reset_with_initial_placements()

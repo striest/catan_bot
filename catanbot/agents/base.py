@@ -50,11 +50,28 @@ class Agent:
         return random.choice(acts)
 
     @property
+    def observation_space(self):
+        pidx_shape = np.array(4)
+        resources_shape = np.array(len(self.resources) - 1)
+        dev_shape = np.array(len(self.dev) - 1)
+        trade_ratios_shape = np.array(len(self.trade_ratios) - 1)
+        return {
+            'pidx':pidx_shape,
+            'resources':resources_shape,
+            'dev':dev_shape,
+            'trade_ratios':trade_ratios_shape,
+            'total':np.array(pidx_shape + resources_shape + dev_shape + trade_ratios_shape)
+        }
+
+    @property
     def observation(self):
         """
         For neural networks, log current cards, dev cards and trade ratios
         """
+        player_idx = np.zeros(4)
+        player_idx[self.pidx] = 1.
         return {
+            'pidx':player_idx,
             'resources':self.resources[1:],
             'dev':self.dev[1:],
             'trade_ratios':self.trade_ratios[1:]

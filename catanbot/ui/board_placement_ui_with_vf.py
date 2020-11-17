@@ -11,9 +11,8 @@ from catanbot.board import Board
 from catanbot.ui.renderer import BoardRenderer
 from catanbot.ui.button import Button
 
-from catanbot.agents.heuristic_agent import HeuristicAgent
-from catanbot.agents.base import Agent
-from catanbot.simulator import CatanSimulator
+from catanbot.agents.independent_actions_agents import IndependentActionsHeuristicAgent, IndependentActionsAgent
+from catanbot.core.independent_action_simulator import IndependentActionsCatanSimulator
 from catanbot.board_placement.placement import MCTSSearch, MCTSNode
 from catanbot.board_placement.ray_mcts import RayMCTS
 
@@ -23,7 +22,7 @@ class BoardPlacementUI:
 
     #Probably need some FSM to move through the clicks asynchronously.
     """
-    def __init__(self, screen, nthreads, nsamples, exploration, maxtime):
+    def __init__(self, screen, nthreads, nsamples, exploration, maxtime, network):
         self.screen = screen
         self.board = Board()
         self.board.reset()
@@ -40,9 +39,11 @@ class BoardPlacementUI:
         self.max_time = maxtime
         self.turn_number = 0
 
-        self.agents = [HeuristicAgent(self.board), HeuristicAgent(self.board), HeuristicAgent(self.board), HeuristicAgent(self.board)]
-		s = CatanSimulator(board=self.board, players = self.agents, max_vp=10)
+        self.agents = [IndependentActionsHeuristicAgent(self.board), IndependentActionsHeuristicAgent(self.board), IndependentActionsHeuristicAgent(self.board), IndependentActionsHeuristicAgent(self.board)]
+        s = IndependentActionsCatanSimulator(board=self.board, players = self.agents, max_vp=10)
         s.reset_from(self.board, self.agents)
+
+        self.network = network
 
         mcts = RayMCTS(s, n_samples=self.nsamples, n_threads=self.nthreads)
         mcts.root.turn_number = 0
@@ -72,7 +73,8 @@ class BoardPlacementUI:
         self.evaluate_net()
 
     def evaluate_net(self):
-        import pdb;pdb.set_trace()
+        self.mcts.simulator.turn = self.get_player() - 1
+        print(self.mcts.simulator.observation['player']['pidx'])
         obs = torch.tensor(self.mcts.simulator.observation_flat).float().detach()
         print('V Predictions = {}'.format(self.network(obs)))
 
@@ -269,14 +271,17 @@ if __name__ == '__main__':
     parser.add_argument('--nsamples', type=int, required=False, default=1, help='The number of games to play at each rollout')
     parser.add_argument('--c', type=float, required = False, default=1.0, help='Exploration factor for MCTS (1.0 default, more=more exploration, less=more exploitation)')
     parser.add_argument('--max_time', type=float, required = False, default=300.0, help='Optional max time to run MCTS for')
+    parser.add_argument('--net_path', type=str, required=True, help='Path to the neural network')
     args = parser.parse_args()
     pygame.init()
+
+    net = torch.load(args.net_path)
 
     # Set up the drawing window
     screen = pygame.display.set_mode([900, 800])
     pygame.display.set_caption('Catan Placement Assist')
 
-    ui = BoardPlacementUI(screen, nthreads = args.nthreads, nsamples = args.nsamples, exploration = args.c, maxtime = args.max_time)
+    ui = BoardPlacementUI(screen, nthreads = args.nthreads, nsamples = args.nsamples, exploration = args.c, maxtime = args.max_time, network=net)
     signal.signal(signal.SIGINT, ui.handle_stop)
 
     # Run until the user asks to quit

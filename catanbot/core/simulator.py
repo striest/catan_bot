@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import copy
 import random
 import time
 
@@ -49,6 +50,21 @@ class CatanSimulator:
         return (self.vp == self.max_vp).astype(int)
 
     @property
+    def action_space(self):
+        return self.players[0].action_space
+
+    @property
+    def observation_space(self):
+        return {
+            'board':self.board.observation_space,
+            'player':self.players[self.turn].observation_space,
+            'vp':np.array(4),
+            'army':np.array(4),
+            'road':np.array(4),
+            'total':np.array(self.board.observation_space['total'] + self.players[self.turn].observation_space['total'] + 12)
+        }
+
+    @property
     def observation(self):
         """
         For neural networks, combine the observations from current player and board
@@ -71,6 +87,26 @@ class CatanSimulator:
             'army':army,
             'road':road
         }
+
+    @property
+    def observation_flat(self):
+        obs = self.observation
+        board_obs_flat = np.concatenate([obs['board'][k].flatten() for k in ['tiles', 'roads', 'settlements']])
+        player_obs_flat = np.concatenate([obs['player'][k].flatten() for k in ['pidx', 'resources', 'dev', 'trade_ratios']])
+        obs_flat = np.concatenate([board_obs_flat, player_obs_flat, obs['vp'], obs['army'], obs['road']])
+        return obs_flat 
+
+    @property
+    def reward(self):
+        """
+        Unlike traditional RL, reward is a 4-tensor per player.
+        simple reward though. Start w/ sparse and give 1 to winner.
+        """
+        rew = np.zeros(4)
+        if self.terminal:
+            rew[np.argmax(self.vp)] = 1.
+
+        return rew
     
     @property
     def terminal(self):
@@ -94,7 +130,7 @@ class CatanSimulator:
         """
         Start game from seed board (with initial placements)
         """
-        self.board = board
+        self.board = copy.deepcopy(board)
         if players is not None:
             self.players = players
         self.vp = self.vp * 0
@@ -114,8 +150,10 @@ class CatanSimulator:
         self.knights_played = np.zeros(4, dtype=int)
         self.largest_army_pidx = -1
 
-    def reset_with_initial_placements(self):
-        self.base_reset()
+    def initial_placements(self):
+        """
+        Place initial settlements on the board.
+        """
         for i in range(8):
             s = np.random.choice(self.board.compute_settlement_spots())
             self.board.place_settlement(s, 1 + i%4, False)
@@ -137,6 +175,10 @@ class CatanSimulator:
         self.longest_road_pidx = -1
         self.knights_played = np.zeros(4, dtype=int)
         self.largest_army_pidx = -1
+
+    def reset_with_initial_placements(self):
+        self.base_reset()
+        self.initial_placements()
 
     def step(self, action, check = False):
         pval = self.turn + 1

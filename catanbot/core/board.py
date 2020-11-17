@@ -67,6 +67,19 @@ class Board:
         self.dev_dist = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 4, 4, 5, 5])
         self.port_dist = np.array([1, 2, 3, 4, 5, 6, 6, 6, 6]) #6 for a 3:1 port    
 
+        neighbor_roads = self.settlements[:, 5:8]
+        neighbors = np.ones([self.settlements.shape[0], 3]).astype(int) * -1
+
+        for i, road_idx_vec in enumerate(neighbor_roads.T):
+            roads = self.roads[road_idx_vec]
+
+            #Find the road endpoint that isn't you
+            neighbor_settlement_idx = roads[np.arange(54), 1+np.argmax(roads[:, 1:] != np.tile(np.arange(54), [2, 1]).T, axis=1)]
+            neighbor_settlement_idx[road_idx_vec == -1] = -1
+            neighbors[:, i] = neighbor_settlement_idx
+
+        self.settlement_neighbors = neighbors
+
     @property
     def observation(self):
         """
@@ -79,13 +92,18 @@ class Board:
         """
         tile_info = np.copy(self.tiles[:, [1, 4]])
         tile_resource_info = to_one_hot(self.tiles[:, 0], 6)
+#        tile_resource_info = np.copy(self.tiles[:, [0]])
         tile_info = np.concatenate([tile_resource_info, tile_info], axis=1)
 
-        road_occ_info = np.copy(self.roads[:, 0])
+        road_occ_info = np.copy(self.roads[:, [0]])
         road_info = to_one_hot(road_occ_info, 5)
+#        road_info = road_occ_info
 
         settlement_occ_info = to_one_hot(self.settlements[:, 0], 5)
         settlement_port_info = to_one_hot(self.settlements[:, 2], 7)
+
+#        settlement_occ_info = np.copy(self.settlements[:, [0]])
+#        settlement_port_info = np.copy(self.settlements[:, [2]])
         settlement_info = np.copy(self.settlements[:, [1]])
         settlement_info = np.concatenate([settlement_occ_info, settlement_info, settlement_port_info], axis=1)
 
@@ -94,6 +112,23 @@ class Board:
             'roads':road_info,
             'settlements':settlement_info,
         }
+
+    @property
+    def observation_space(self):
+        return {
+            'tiles':np.array(19*8),
+            'roads':np.array(72*5),
+            'settlements':np.array(54*13),
+            'total':np.array(19*8+54*13+72*5)
+        }
+        """
+        return {
+            'tiles':np.array(19*3),
+            'roads':np.array(72*1),
+            'settlements':np.array(54*3),
+            'total':np.array(19*3+54*3+72*1)
+        }
+        """
 
     def equals(self, b2):
         """
@@ -109,6 +144,7 @@ class Board:
         self.tiles[:, 0] = self.tile_dist[tile_idxs]
         self.tiles[:, 1][self.tiles[:, 0] != 0] = self.value_dist[value_idxs]
         self.tiles[:, 1][self.tiles[:, 0] == 0] = 0
+        self.tiles[:, 4] = 0
         self.tiles[np.argmin(self.tiles[:, 0]), 4] = 1 #Robber starts on desert
         self.roads[:, 0] *= 0
         self.settlements[:, [0, 1, 2]] *= 0
