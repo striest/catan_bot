@@ -91,9 +91,12 @@ class Board:
         return as a dict of numpy arrs with these headings.
         """
         tile_info = np.copy(self.tiles[:, [1, 4]])
+        tile_production = 6 - np.abs(7 - self.tiles[:, 1])
+        tile_production[self.tiles[:, 0] == 0] = 0.
+        tile_production_info = np.expand_dims(tile_production, axis=1)
         tile_resource_info = to_one_hot(self.tiles[:, 0], 6)
 #        tile_resource_info = np.copy(self.tiles[:, [0]])
-        tile_info = np.concatenate([tile_resource_info, tile_info], axis=1)
+        tile_info = np.concatenate([tile_resource_info, tile_info, tile_production_info], axis=1)
 
         road_occ_info = np.copy(self.roads[:, [0]])
         road_info = to_one_hot(road_occ_info, 5)
@@ -102,10 +105,12 @@ class Board:
         settlement_occ_info = to_one_hot(self.settlements[:, 0], 5)
         settlement_port_info = to_one_hot(self.settlements[:, 2], 7)
 
+        settlement_production_info = self.compute_production()[:, [1]]
+
 #        settlement_occ_info = np.copy(self.settlements[:, [0]])
 #        settlement_port_info = np.copy(self.settlements[:, [2]])
         settlement_info = np.copy(self.settlements[:, [1]])
-        settlement_info = np.concatenate([settlement_occ_info, settlement_info, settlement_port_info], axis=1)
+        settlement_info = np.concatenate([settlement_occ_info, settlement_info, settlement_port_info, settlement_production_info], axis=1)
 
         return {
             'tiles':tile_info,
@@ -116,10 +121,10 @@ class Board:
     @property
     def observation_space(self):
         return {
-            'tiles':np.array(19*8),
+            'tiles':np.array(19*9),
             'roads':np.array(72*5),
-            'settlements':np.array(54*13),
-            'total':np.array(19*8+54*13+72*5)
+            'settlements':np.array(54*14),
+            'total':np.array(19*9+54*14+72*5)
         }
         """
         return {
@@ -454,6 +459,8 @@ if __name__ == '__main__':
     board.place_road(34, 4)
 
     import pdb;pdb.set_trace()
+    print(board.observation)
+    print(board.observation_space)
 
     for i in range(2, 13):
         print('roll = {}'.format(i))

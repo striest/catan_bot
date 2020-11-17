@@ -166,10 +166,10 @@ class OffPolicyRLAlgorithm(RLAlgorithm):
         self.logger.record_item("Num Episodes", self.logger.get(prefix='', field='Num Episodes', default=0) + trajs['terminal'].float().sum().item())
         self.logger.record_item("Num Added Episodes", trajs['terminal'].float().sum().item())
         self.logger.record_item("Total Steps", self.logger.get(prefix='', field='Total Steps', default=0) + trajs['observation'].shape[0])
-        self.logger.record_item('1 Policy 1 Eval Actions', trajs['action'][0::8].argmax(dim=1)/3, prefix='Performance')
-        self.logger.record_item('2 Policy 2 Eval Actions', trajs['action'][1::8].argmax(dim=1)/3, prefix='Performance')
-        self.logger.record_item('3 Policy 3 Eval Actions', trajs['action'][2::8].argmax(dim=1)/3, prefix='Performance')
-        self.logger.record_item('4 Policy 4 Eval Actions', trajs['action'][3::8].argmax(dim=1)/3, prefix='Performance')
+        self.logger.record_item('1 Policy 1 Eval Actions', trajs['action'][0:100:8].argmax(dim=1)/3, prefix='Performance')
+        self.logger.record_item('2 Policy 2 Eval Actions', trajs['action'][1:100:8].argmax(dim=1)/3, prefix='Performance')
+        self.logger.record_item('3 Policy 3 Eval Actions', trajs['action'][2:100:8].argmax(dim=1)/3, prefix='Performance')
+        self.logger.record_item('4 Policy 4 Eval Actions', trajs['action'][3:100:8].argmax(dim=1)/3, prefix='Performance')
 
         for qi in range(self.qf_itrs):
             batch = self.collect()

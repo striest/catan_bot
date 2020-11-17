@@ -44,7 +44,7 @@ target_qf2 = InitialPlacementsQMLP(placement_simulator, hiddens = hiddens, scale
 qf = InitialPlacementsDoubleQMLP(qf1, qf2)
 target_qf = InitialPlacementsDoubleQMLP(target_qf1, target_qf2)
 
-placement_simulator.players = [EpsilonGreedyPlacementAgent(b, qf, lambda e:0.05, pidx=0), EpsilonGreedyPlacementAgent(b, qf, lambda e:0.05, pidx=1), EpsilonGreedyPlacementAgent(b, qf, lambda e:0.05, pidx=2), EpsilonGreedyPlacementAgent(b, qf, lambda e:0.05, pidx=3)]
+placement_simulator.players = [EpsilonGreedyPlacementAgent(b, qf, lambda e:0.1, pidx=0), EpsilonGreedyPlacementAgent(b, qf, lambda e:0.1, pidx=1), EpsilonGreedyPlacementAgent(b, qf, lambda e:0.1, pidx=2), EpsilonGreedyPlacementAgent(b, qf, lambda e:0.1, pidx=3)]
 
 #placement_simulator.players = [EpsilonGreedyPlacementAgentWithMask(b, qf, lambda e:0.05, pidx=0), EpsilonGreedyPlacementAgentWithMask(b, qf, lambda e:0.05, pidx=1), EpsilonGreedyPlacementAgentWithMask(b, qf, lambda e:0.05, pidx=2), EpsilonGreedyPlacementAgentWithMask(b, qf, lambda e:0.05, pidx=3)]
 
@@ -68,7 +68,7 @@ buf = SimpleReplayBuffer(placement_simulator, capacity = 200000)
 #placement_simulator.render()
 #plt.pause(1e-2)
 
-algo = DQN(placement_simulator, qf, target_qf, buf, collector, rollouts_per_epoch=10, qf_itrs=80, qf_batch_size=32, qf_lr=1e-5)
+algo = DQN(placement_simulator, qf, target_qf, buf, collector, rollouts_per_epoch=80, qf_itrs=500, qf_batch_size=64, qf_lr=1e-5)
 
 experiment = Experiment(algo, '../../../experiments/catan_initial_placement_dqn_twinq_action_mask', save_every=5, save_logs_every=5)
 import torch
