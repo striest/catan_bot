@@ -4,7 +4,7 @@ import copy
 import random
 import time
 
-from catanbot.board import Board
+from catanbot.core.board import Board
 from catanbot.agents.base import Agent
 from catanbot.agents.heuristic_agent import HeuristicAgent
 from catanbot.constants import DEV, SETTLEMENT, CITY, ROAD

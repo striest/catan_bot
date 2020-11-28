@@ -7,14 +7,17 @@ import torch
 from math import sin, cos, pi, floor
 import matplotlib.pyplot as plt
 
-from catanbot.board import Board
+from catanbot.core.board import Board
 from catanbot.ui.renderer import BoardRenderer
 from catanbot.ui.button import Button
 
 from catanbot.agents.independent_actions_agents import IndependentActionsHeuristicAgent, IndependentActionsAgent
 from catanbot.core.independent_action_simulator import IndependentActionsCatanSimulator
-from catanbot.board_placement.placement import MCTSSearch, MCTSNode
-from catanbot.board_placement.ray_mcts import RayMCTS
+from catanbot.board_placement.agents.base import InitialPlacementAgent, MakeDeterministic
+from catanbot.core.independent_action_simulator import IndependentActionsCatanSimulator
+from catanbot.board_placement.initial_placement_simulator import InitialPlacementSimulator, InitialPlacementSimulatorWithPenalty
+from catanbot.rl.collectors.initial_placement_collector import InitialPlacementCollector
+from catanbot.board_placement.initial_placement_mcts import RayMCTSQFSearch
 
 class BoardPlacementUI:
     """
@@ -42,12 +45,11 @@ class BoardPlacementUI:
         self.agents = [IndependentActionsHeuristicAgent(self.board), IndependentActionsHeuristicAgent(self.board), IndependentActionsHeuristicAgent(self.board), IndependentActionsHeuristicAgent(self.board)]
         s = IndependentActionsCatanSimulator(board=self.board, players = self.agents, max_vp=10)
         s.reset_from(self.board, self.agents)
-
-        self.network = network
-
-        mcts = RayMCTS(s, n_samples=self.nsamples, n_threads=self.nthreads)
-        mcts.root.turn_number = 0
-        self.mcts = mcts
+        placement_agents = [InitialPlacementAgent(self.board), InitialPlacementAgent(self.board), InitialPlacementAgent(self.board), InitialPlacementAgent(self.board)]
+        placement_simulator = InitialPlacementSimulator(s, placement_agents)
+        collector = InitialPlacementCollector(placement_simulator, reset_board=True, reward_scale=1.)
+        self.qf = network
+        self.mcts = RayMCTSQFSearch(placement_simulator, self.qf, n_threads=self.nthreads)
         self.running_mcts = False
         self.mcts_results = None
 
@@ -70,13 +72,6 @@ class BoardPlacementUI:
             'b': 5,
             'a': 6
         }
-        self.evaluate_net()
-
-    def evaluate_net(self):
-        self.mcts.simulator.turn = self.get_player() - 1
-        print(self.mcts.simulator.observation['player']['pidx'])
-        obs = torch.tensor(self.mcts.simulator.observation_flat).float().detach()
-        print('V Predictions = {}'.format(self.network(obs)))
 
     def handle_keystroke(self, event):
         try:
@@ -175,6 +170,9 @@ class BoardPlacementUI:
                 self.edit_port_idx = o_idx
 
         if self.mcts_button.collidepoint(event.pos):
+            self.mcts.root.simulator.simulator.reset_from(self.board, self.agents)
+            self.mcts.root.simulator.turn = self.turn_number
+            self.mcts = RayMCTSQFSearch(self.mcts.root.simulator, self.qf, n_threads=self.nthreads)
             topk = self.run_mcts()
             self.mcts_results = topk
 
@@ -189,19 +187,24 @@ class BoardPlacementUI:
                 self.turn_number += 1
 
             #Update the mcts root, as the player has locked in the settlement
-            self.mcts.simulator.reset_from(self.board, self.agents)
-            self.mcts.update_root(self.board)
-            self.evaluate_net()
+#            self.mcts.simulator.reset_from(self.board, self.agents)
+#            self.mcts.update_root(self.board)
+            self.mcts.root.simulator.simulator.reset_from(self.board, self.agents)
+            self.mcts.root.simulator.turn = self.turn_number
+            self.mcts = RayMCTSQFSearch(self.mcts.root.simulator, self.qf, n_threads=self.nthreads)
 
         if self.randomize_button.collidepoint(event.pos):
+            self.turn_number = 0
             self.board.reset()
-            self.mcts.simulator.reset_from(self.board, self.agents)
-            self.mcts.update_root(self.board)
-            self.mcts.root.turn_number = 0
+            self.mcts.root.simulator.simulator.reset_from(self.board, self.agents)
+            self.mcts.root.simulator.turn = self.turn_number
+            self.mcts = RayMCTSQFSearch(self.mcts.root.simulator, self.qf, n_threads=self.nthreads)
+#            self.mcts.simulator.reset_from(self.board, self.agents)
+#            self.mcts.update_root(self.board)
+#            self.mcts.root.turn_number = 0
             self.running_mcts = False
 
             self.mcts_results = None
-            self.evaluate_net()
 
     def get_player(self):
         """
@@ -214,6 +217,8 @@ class BoardPlacementUI:
         Sets up the backend to run MCTS. Also needs to ask the user for the time and c and threads to run mcts for and which player to run for, as we don't enforce valid board placements.
         Returns info for the top 5 results and updates the search tree
         """
+        print(self.mcts.root.simulator.player_idx)
+        self.mcts.root.simulator.render()
         self.mcts.sigstop = False
         self.running_mcts = True
 
@@ -221,7 +226,6 @@ class BoardPlacementUI:
 
         self.running_mcts = False
 
-        print(self.mcts.dump(self.mcts.root, 0, c=0))
         return self.get_top5()
 
     def get_top5(self):
@@ -234,7 +238,7 @@ class BoardPlacementUI:
         topk = self.mcts.get_top_k()    
         print('_'*20, 'TOP 5', '_'*20)
         for k in topk:
-            print('Settlement = {}, Road = {}, Win Rate = {:.4f}, Stats = {}'.format(k[0].parent_action, k[1].parent_action, k[2], k[1].stats))
+            print('Settlement = {}, Road = {}, Win Rate = {:.4f}, Stats = {}'.format(k[1][0], k[1][1], k[2], k[0]))
         
         return topk
 

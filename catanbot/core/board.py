@@ -111,6 +111,7 @@ class Board:
 #        settlement_port_info = np.copy(self.settlements[:, [2]])
         settlement_info = np.copy(self.settlements[:, [1]])
         settlement_info = np.concatenate([settlement_occ_info, settlement_info, settlement_port_info, settlement_production_info], axis=1)
+#        settlement_info = np.concatenate([settlement_occ_info, settlement_production_info], axis=1)
 
         return {
             'tiles':tile_info,
@@ -126,12 +127,13 @@ class Board:
             'settlements':np.array(54*14),
             'total':np.array(19*9+54*14+72*5)
         }
+
         """
         return {
-            'tiles':np.array(19*3),
-            'roads':np.array(72*1),
-            'settlements':np.array(54*3),
-            'total':np.array(19*3+54*3+72*1)
+            'tiles':np.array(1),
+            'roads':np.array(11),
+            'settlements':np.array(54*2),
+            'total':np.array(1+54*2+1)
         }
         """
 

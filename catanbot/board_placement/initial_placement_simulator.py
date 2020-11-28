@@ -52,6 +52,7 @@ class InitialPlacementSimulator:
         temp = self.simulator.turn
         self.simulator.turn = self.player_idx
         obs = self.simulator.observation
+#        obs['board']['settlements'] = obs['board']['settlements'][:, [0, -1]]
         self.simulator.turn = temp
         return obs
 
@@ -84,6 +85,21 @@ class InitialPlacementSimulator:
             if np.sum(scores) > 0:
                 scores /= np.sum(scores)
             return scores
+
+    def action_mask(self): 
+        act_mask = np.zeros([54, 3]).astype(bool)
+
+        settlement_locs = np.zeros(54).astype(bool)
+        settlement_locs[self.simulator.board.compute_settlement_spots()] = 1
+        settlement_avail = np.expand_dims(settlement_locs, axis=1)
+
+        road_choices = self.simulator.board.settlements[:, 5:8]
+        road_avail = (road_choices != -1)
+        road_open = self.simulator.board.roads[road_choices, 0] == 0
+
+        act_mask = (road_avail & road_open & settlement_avail)
+
+        return act_mask
                 
     def step(self, action):
         """
@@ -139,26 +155,21 @@ class InitialPlacementSimulatorWithPenalty(InitialPlacementSimulator):
         Can simulate multiple games from this point.
         Penalize agents for taking an action that doesn't net 7+ production.
         """
-        if not self.terminal:
-            return np.zeros(4)
+        prods = self.simulator.board.compute_production()[:, 1]
+        settlement_spots = self.simulator.board.settlements[:, 0]
+        if self.turn > 0 and self.turn < 4:
+            prev_pidx = self.player_idx - 1
+        elif self.turn >= 5 and self.turn <=8:
+            prev_pidx = self.player_idx + 1
         else:
-            scores = np.zeros(4)
-            for _ in range(n):
-                s_copy = copy.deepcopy(self.simulator)
-                scores += s_copy.simulate()
-            if np.sum(scores) > 0:
-                scores /= np.sum(scores)
+            prev_pidx = self.player_idx
 
-            prods = self.simulator.board.compute_production()[:, 1]
-            settlement_spots = self.simulator.board.settlements[:, 0]
+        scores = np.zeros(4)
+        prod_i = prods[settlement_spots == prev_pidx + 1]
+        if np.any(prod_i < 7):
+            scores[prev_pidx] = -1.
 
-            scores = np.zeros(4)
-            for i in range(4):
-                prod_i = prods[settlement_spots == i+1]
-                if np.any(prod_i < 7):
-                    scores[i] = -1.
-
-            return scores
+        return scores
         
 if __name__ == '__main__':
     b = Board()

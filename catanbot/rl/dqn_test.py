@@ -29,12 +29,12 @@ insize = s.observation_space['total']
 attention_insize = 12
 attention_outsize = 256
 outsize = 54*3
-hiddens = [2048, 1024]
+hiddens = [512, 256]
 bias = [True, True, True, True]
 
 placement_agents = [InitialPlacementAgent(b), InitialPlacementAgent(b), InitialPlacementAgent(b), InitialPlacementAgent(b)]
 placement_simulator = InitialPlacementSimulator(s, placement_agents)
-placement_simulator = InitialPlacementSimulatorWithPenalty(s, placement_agents)
+#placement_simulator = InitialPlacementSimulatorWithPenalty(s, placement_agents)
 
 qf1 = InitialPlacementsQMLP(placement_simulator, hiddens = hiddens, scale=1., hidden_activation=nn.Tanh,  bias=bias, gpu=False)
 qf2 = InitialPlacementsQMLP(placement_simulator, hiddens = hiddens, scale=1., hidden_activation=nn.Tanh,  bias=bias, gpu=False)
@@ -44,33 +44,37 @@ target_qf2 = InitialPlacementsQMLP(placement_simulator, hiddens = hiddens, scale
 qf = InitialPlacementsDoubleQMLP(qf1, qf2)
 target_qf = InitialPlacementsDoubleQMLP(target_qf1, target_qf2)
 
-placement_simulator.players = [EpsilonGreedyPlacementAgent(b, qf, lambda e:0.1, pidx=0), EpsilonGreedyPlacementAgent(b, qf, lambda e:0.1, pidx=1), EpsilonGreedyPlacementAgent(b, qf, lambda e:0.1, pidx=2), EpsilonGreedyPlacementAgent(b, qf, lambda e:0.1, pidx=3)]
+eps = 0.25
+
+placement_simulator.players = [EpsilonGreedyPlacementAgent(b, qf, lambda e:eps, pidx=0), EpsilonGreedyPlacementAgent(b, qf, lambda e:eps, pidx=1), EpsilonGreedyPlacementAgent(b, qf, lambda e:eps, pidx=2), EpsilonGreedyPlacementAgent(b, qf, lambda e:eps, pidx=3)]
 
 #placement_simulator.players = [EpsilonGreedyPlacementAgentWithMask(b, qf, lambda e:0.05, pidx=0), EpsilonGreedyPlacementAgentWithMask(b, qf, lambda e:0.05, pidx=1), EpsilonGreedyPlacementAgentWithMask(b, qf, lambda e:0.05, pidx=2), EpsilonGreedyPlacementAgentWithMask(b, qf, lambda e:0.05, pidx=3)]
 
 #placement_simulator.players[0] = EpsilonGreedyPlacementAgent(b, qf, lambda e:0.1, pidx=0)
 
 #placement_agents_deterministic = [MakeDeterministic(a) if isinstance(a, MLPPlacementAgent) else a for a in placement_agents]
-#sim2 = InitialPlacementSimulator(s, placement_agents_deterministic)
+sim2 = InitialPlacementSimulator(s, placement_agents)
+#sim2 = InitialPlacementSimulatorWithPenalty(s, placement_agents)
+sim2.players = [EpsilonGreedyPlacementAgent(b, target_qf, lambda e:0, pidx=0), EpsilonGreedyPlacementAgent(b, target_qf, lambda e:0, pidx=1), EpsilonGreedyPlacementAgent(b, target_qf, lambda e:0., pidx=2), EpsilonGreedyPlacementAgent(b, target_qf, lambda e:0., pidx=3)]
 
 #collector = DebugCollector(placement_simulator, reset_board=True, reward_scale=1., nboards=2)
 #eval_collector = DebugCollector(sim2, reset_board=True, reward_scale=1.)
 #eval_collector.stored_boards = collector.stored_boards
 
 collector = InitialPlacementCollector(placement_simulator, reset_board=True, reward_scale=1.) #Multiply reward scale so best actions always beat random net output.
-#eval_collector = InitialPlacementCollector(sim2, reset_board=True, reward_scale=1.)
+eval_collector = InitialPlacementCollector(sim2, reset_board=True, reward_scale=1.)
 
-collector = ParallelizeCollector(collector, nthreads=4)
-#eval_collector = ParallelizeCollector(eval_collector, nthreads=4)
-buf = SimpleReplayBuffer(placement_simulator, capacity = 200000)
+collector = ParallelizeCollector(collector, nthreads=8)
+eval_collector = ParallelizeCollector(eval_collector, nthreads=4)
+buf = SimpleReplayBuffer(placement_simulator, capacity = 300000)
 
 #plt.ion()
 #placement_simulator.render()
 #plt.pause(1e-2)
 
-algo = DQN(placement_simulator, qf, target_qf, buf, collector, rollouts_per_epoch=80, qf_itrs=500, qf_batch_size=64, qf_lr=1e-5)
+algo = DQN(placement_simulator, qf, target_qf, buf, collector, eval_collector, rollouts_per_epoch=50, qf_itrs=50, qf_batch_size=64, qf_lr=1e-4, target_update_tau=0.005)
 
-experiment = Experiment(algo, '../../../experiments/catan_initial_placement_dqn_twinq_action_mask', save_every=5, save_logs_every=5)
+experiment = Experiment(algo, '../../../experiments/catan_initial_placement_dqn_twinq_action_mask', save_every=20, save_logs_every=5)
 import torch
 with torch.autograd.set_detect_anomaly(True):
     experiment.run()

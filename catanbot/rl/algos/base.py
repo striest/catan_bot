@@ -129,6 +129,8 @@ class OffPolicyRLAlgorithm(RLAlgorithm):
             reward_scale,
             epochs,
             steps_per_epoch,
+            eval_steps_per_epoch,
+            eval_every,
             initial_steps,
             replay_buffer,
             qf_itrs,
@@ -139,6 +141,8 @@ class OffPolicyRLAlgorithm(RLAlgorithm):
         self.reward_scale = reward_scale
         self.total_epochs = epochs
         self.steps_per_epoch = steps_per_epoch
+        self.eval_steps_per_epoch = eval_steps_per_epoch
+        self.eval_every = eval_every
         self.initial_steps = initial_steps
 
         self.qf_itrs = qf_itrs
@@ -157,6 +161,12 @@ class OffPolicyRLAlgorithm(RLAlgorithm):
     def train_iteration(self):
         self.current_epoch += 1
         t = time.time()
+        if self.current_epoch % self.eval_every == 0:
+            eval_trajs = self.eval_collector.get_rollouts(self.eval_steps_per_epoch)
+            self.logger.record_item("Eval Return", eval_trajs['reward'].sum(dim=0), prefix = 'Performance') #Assuming sparse reward for this domain
+#            self.logger.record_item('Eval ngoals', (eval_trajs['reward'] == 1).sum(dim=0), prefix='Performance')
+#            self.logger.record_item('Eval final ngoals', (eval_trajs['reward'][eval_trajs['terminal'].bool()] == 1).sum(dim=0), prefix='Performance')
+
         trajs = self.collector.get_rollouts(self.steps_per_epoch)
         collect_time = time.time() - t
         self.replay_buffer.insert(trajs)
@@ -170,6 +180,9 @@ class OffPolicyRLAlgorithm(RLAlgorithm):
         self.logger.record_item('2 Policy 2 Eval Actions', trajs['action'][1:100:8].argmax(dim=1)/3, prefix='Performance')
         self.logger.record_item('3 Policy 3 Eval Actions', trajs['action'][2:100:8].argmax(dim=1)/3, prefix='Performance')
         self.logger.record_item('4 Policy 4 Eval Actions', trajs['action'][3:100:8].argmax(dim=1)/3, prefix='Performance')
+#        self.logger.record_item('ngoals', (trajs['reward'] == 1).sum(dim=0), prefix='Performance')
+#        self.logger.record_item('final ngoals', (trajs['reward'][trajs['terminal'].bool()] == 1).sum(dim=0), prefix='Performance')
+#        self.logger.record_item('P1 acts', trajs['action'][trajs['pidx'] == 0].argmax(dim=1)[:40])
 
         for qi in range(self.qf_itrs):
             batch = self.collect()
@@ -183,6 +196,7 @@ class OffPolicyRLAlgorithm(RLAlgorithm):
             self.logger.record_item('Update time', update_time, prefix = 'Timing')
 
             t = time.time()
-            self.log()
+#            self.log()
             log_time = time.time() - t
             self.logger.record_item('Log Time', log_time, prefix= 'Timing')
+        self.log()

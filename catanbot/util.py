@@ -1,9 +1,14 @@
 import numpy as np
 
-def to_one_hot(arr, max_val, default_val=-1):
+def to_one_hot(arr, max_val, default_val=0.):
     """
     Converts an n-dimensional tensor to an n x max_val one-hot tensor
     """
+    if isinstance(arr, int) or len(arr.shape) == 0:
+        out = np.ones(max_val) * default_val
+        out[arr] = 1.
+        return out
+
     out = np.ones([len(arr), max_val]) * default_val
     out[np.arange(len(arr)), arr] = 1.
     return out

@@ -3,6 +3,7 @@ import numpy as np;np.set_printoptions(precision=6, suppress=True)
 import matplotlib.pyplot as plt
 import copy
 import argparse
+import time
 
 from catanbot.core.board import Board
 from catanbot.agents.independent_actions_agents import IndependentActionsHeuristicAgent, IndependentActionsAgent
@@ -37,22 +38,57 @@ placement_agents = [MLPPlacementAgent(b, MLP(1, 1, [1, ])), InitialPlacementAgen
 qf = torch.load(args.qf_fp)
 qf.eval()
 
-#placement_simulator = InitialPlacementSimulator(s, placement_agents)
-placement_simulator = InitialPlacementSimulatorWithPenalty(s, placement_agents)
-placement_simulator.players = [EpsilonGreedyPlacementAgent(b, qf, lambda e:0.25, pidx=0), EpsilonGreedyPlacementAgent(b, qf, lambda e:0.25, pidx=1), EpsilonGreedyPlacementAgent(b, qf, lambda e:0.25, pidx=2), EpsilonGreedyPlacementAgent(b, qf, lambda e:0.25, pidx=3)]
+placement_simulator = InitialPlacementSimulator(s, placement_agents)
+#placement_simulator = InitialPlacementSimulatorWithPenalty(s, placement_agents)
+placement_simulator.players = [EpsilonGreedyPlacementAgent(b, qf, lambda e:0., pidx=0), EpsilonGreedyPlacementAgent(b, qf, lambda e:0., pidx=1), EpsilonGreedyPlacementAgent(b, qf, lambda e:0., pidx=2), EpsilonGreedyPlacementAgent(b, qf, lambda e:0., pidx=3)]
 
 collector = InitialPlacementCollector(placement_simulator, reset_board=True, reward_scale=1.)
 
-obs = collector.flatten_observation(placement_simulator.observation)
-obs = torch.tensor(obs).float()
+q_seq = []
+timing = []
+obses = []
+
+while not placement_simulator.terminal:
+    obs = collector.flatten_observation(placement_simulator.observation)
+    obs = torch.tensor(obs).float()
+    with torch.no_grad():
+        t = time.time()
+        qvals = qf(obs.unsqueeze(0)).squeeze()
+        timing.append(time.time() - t)
+
+    q_seq.append(qvals.max(dim=1)[0])
+
+    act = placement_simulator.players[placement_simulator.player_idx].action(obs, obs)
+    placement_simulator.step(act)
+
+    placement_simulator.render()
+
+    obses.append(obs)
+
 with torch.no_grad():
     qvals = qf(obs.unsqueeze(0)).squeeze()
+q_seq.append(qvals.max(dim=1)[0])
+q_seq = torch.stack(q_seq, dim=0)
+
+obses = torch.stack(obses, dim=0)
+t = time.time()
+with torch.no_grad():
+    qf(obses)
+    print('batch time = {:.4f}'.format(time.time() - t))
 
 for i in range(4):
-    qi = qvals[i]
-    print('PLAYER {} Q =\n{}'.format(i+1, torch.cat([torch.arange(54).unsqueeze(1), qi.view(54, 3)], dim=1).numpy()))
-    print('TOP 5 =\n{}'.format(qi.flatten().topk(5).indices/3))
-    print('MAX Q= \n{}'.format(qi.max()))
-    break
+    print('Player {} Q = '.format(i+1))
+    print(qvals[i])
+
+print('Q sequence')
+print(q_seq)
+
+print('Final Qs')
+print(q_seq[-1])
+
+print('NN time = {:.4f}'.format(sum(timing) / len(timing)))
+
+print('Simulated wins:')
+print(placement_simulator.reward(n=100))
 
 placement_simulator.render()
