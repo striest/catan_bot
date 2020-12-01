@@ -143,7 +143,7 @@ class Board:
         """
         return np.array_equal(self.tiles, b2.tiles) and np.array_equal(self.roads, b2.roads) and np.array_equal(self.settlements, b2.settlements) and np.array_equal(self.dev_cards, b2.dev_cards)
         
-    def reset(self):
+    def reset(self, fair=True):
         tile_idxs = np.random.permutation(19)
         value_idxs = np.random.permutation(18)
         dev_idxs = np.random.permutation(25)
@@ -151,6 +151,9 @@ class Board:
         self.tiles[:, 0] = self.tile_dist[tile_idxs]
         self.tiles[:, 1][self.tiles[:, 0] != 0] = self.value_dist[value_idxs]
         self.tiles[:, 1][self.tiles[:, 0] == 0] = 0
+        if fair:
+            self.tiles[:, 1] = self.randomize_fair(tile_idxs)
+
         self.tiles[:, 4] = 0
         self.tiles[np.argmin(self.tiles[:, 0]), 4] = 1 #Robber starts on desert
         self.roads[:, 0] *= 0
@@ -160,6 +163,39 @@ class Board:
         #idk why I can't just broadcast it
         for i, locs in enumerate(self.port_locations):
             self.settlements[locs[:2], 2] = self.port_dist[port_idxs[i]]
+
+    def randomize_fair(self, tile_idxs):
+        """
+        Randomize production values such that no settlement spot has more than one 6 or 8 (collectively)
+        """
+        adjacencies = np.ones([19, 6]).astype(int) * -1
+        adjacencies[:, 0] = np.array([1, 0, 1, 0, 0, 1, 2, 3, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14])
+        adjacencies[:, 1] = np.array([3, 2, 5, 4, 1, 2, 5, 8, 4, 5, 6, 10, 8, 9, 10, 11, 13, 14, 15])
+        adjacencies[:, 2] = np.array([4, 4, 6, 7, 3, 4, 10, 12, 7, 8, 9, 15, 13, 12, 13, 14, 17, 16, 17])
+        adjacencies[:, 3] = np.array([-1, 5, -1, 8, 5, 6, 11, -1, 9, 10, 11, -1, 16, 14, 15, 18, -1, 18, -1])
+        adjacencies[:, 4] = np.array([-1, -1, -1, -1, 8, 9, -1, -1, 12, 13, 14, -1, -1, 16, 17, -1, -1, -1, -1])
+        adjacencies[:, 5] = np.array([-1, -1, -1, -1, 9, 10, -1, -1, 13, 14, 15, -1, -1, 17, 18, -1, -1, -1, -1])
+
+        value_idxs = np.random.permutation(18)
+        value_ordering = self.value_dist[value_idxs]
+        desert_idx = np.argmax(self.tile_dist[tile_idxs] == 0)
+        value_ordering = np.insert(value_ordering, desert_idx, 0)
+        high_prod_idxs = np.argwhere((value_ordering == 6) | (value_ordering == 8)).flatten()
+        np.random.shuffle(high_prod_idxs)
+        adj = adjacencies[high_prod_idxs] 
+        for i, idx in enumerate(high_prod_idxs):
+            if idx in adj:
+                #6/8 borders another. Look for available swap spot
+                adj_flat = np.unique(adj.flatten())
+                adj_flat = adj_flat[(adj_flat >= 0)]
+                invalid_idxs = np.concatenate([adj_flat, high_prod_idxs, np.array([desert_idx])])
+                valid_idxs = np.setdiff1d(np.arange(19), invalid_idxs)
+                valid_idx = np.random.choice(valid_idxs)
+                value_ordering[[idx, valid_idx]] = value_ordering[[valid_idx, idx]]
+                high_prod_idxs[i] = valid_idx
+                adj = adjacencies[high_prod_idxs] 
+
+        return value_ordering
 
     def reset_from_string(self, tile_string, port_string):
         """
@@ -445,7 +481,11 @@ class Board:
 
 if __name__ == '__main__':
     board = Board()
-    board.reset()
+
+    for i in range(10):
+        board.reset()
+        board.render();plt.show()
+    
 
     board.place_settlement(3, 1, False)
     board.place_settlement(23, 2, False)

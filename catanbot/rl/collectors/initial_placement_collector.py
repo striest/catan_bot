@@ -62,6 +62,58 @@ class InitialPlacementCollector(Collector):
         obs_flat = np.concatenate([board_obs_flat, player_obs_flat, obs['vp'], obs['army'], obs['road']])
         return obs_flat
 
+class InitialPlacementComparisonCollector(InitialPlacementCollector):
+    """
+    Special collector for Alphago-style self-play. We take in two Q-functions for eval and simulate games to get their relative strengths.
+    """
+    def get_rollouts(self, qf1, qf2, n):
+        rollouts = [self.get_rollout(qf1, qf2) for _ in range(n)]
+        out = self.setup_rollout_dict()
+
+        if n == 0:
+            return out
+
+        wins = np.stack([r[1] for r in rollouts], axis=0).sum(axis=0)
+        if wins.sum() > 0:
+            wins /= wins.sum()
+        for k in rollouts[0][0].keys():
+            out[k] = torch.cat([r[0][k] for r in rollouts], dim=0)
+
+        return out, wins 
+
+    def get_rollout(self, qf1, qf2, rollout_n = 1):
+        """
+        Implement as follows:
+            1. Save current player q functions.
+            2. Replace 2 players with qf1 other two with qf2.
+            3. Simulate n games and collect standard rollout info, but also collect win rates
+
+        NOTE: we assume sparse reward structure given in the final rollout step.
+        """
+        x = np.random.permutation(np.arange(4))
+        qf1_players = x[:2]
+        qf2_players = x[2:]
+        old_qfs = [p.network for p in self.simulator.players]
+
+        for pidx in qf1_players:
+            self.simulator.players[pidx].network = qf1
+        for pidx in qf2_players:
+            self.simulator.players[pidx].network = qf2
+
+        rollout = super().get_rollout(rollout_n=rollout_n)
+        scores = rollout['reward'].sum(axis=0)
+        qf1_score = scores[qf1_players].sum()
+        qf2_score = scores[qf2_players].sum()
+        if scores.sum() > 0:
+            qf1_score /= scores.sum()
+            qf2_score /= scores.sum()
+        wins = np.array([qf1_score, qf2_score])
+
+        for pidx, qf in enumerate(old_qfs):
+            self.simulator.players[pidx].network = qf
+
+        return rollout, wins
+
 class DebugCollector(InitialPlacementCollector):
     """
     Collector for debugging. Cycles between a few random boards.
@@ -76,7 +128,7 @@ class DebugCollector(InitialPlacementCollector):
             self.simulator.reset(reset_board=True)
             self.stored_boards.append(copy.deepcopy(self.simulator.simulator.board))
             self.simulator.render()
-    
+
     def get_rollout(self, rollout_n = 10, i=0, verbose=False):
         if i % 100 == 0:
             print('Rollout {}'.format(i))

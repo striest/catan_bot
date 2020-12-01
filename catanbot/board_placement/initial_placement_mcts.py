@@ -250,7 +250,7 @@ class RayMCTSQFSearch:
     """
     Use Ray to parallelize the search.
     """
-    def __init__(self, simulator, qf, n_threads = 1):
+    def __init__(self, simulator, qf, n_threads = 1, workers = None):
         ray.init(ignore_reinit_error=True)
         self.simulator = simulator
         self.original_board = simulator.simulator.board
@@ -260,8 +260,12 @@ class RayMCTSQFSearch:
         self.n_threads = n_threads
         self.workers = []
         self.sigstop = False
-        for _ in range(self.n_threads):
-            self.workers.append(MCTSQFRayWorker.remote(qf))
+
+        if workers is None:
+            for _ in range(self.n_threads):
+                self.workers.append(MCTSQFRayWorker.remote(qf))
+        else:
+            self.workers = workers
 
     def search(self, n_rollouts = None, max_time = None, c=1.0, verbose=False):
         """
@@ -476,12 +480,15 @@ class MCTSQFRayWorker:
 
         return ch
         
-    def rollout(self, x, lam=0.25):
+    def rollout(self, x, lam=0.2):
         node = copy.deepcopy(x)
         sim_copy = copy.deepcopy(node.simulator)
         while not node.simulator.terminal:
             act_mask = node.simulator.action_mask().flatten()
-            acts = np.argwhere(act_mask).flatten()
+            prod = node.simulator.simulator.board.compute_production()[:, 1]
+            prod = np.repeat(prod, 3)
+            high_prod = (prod >= 7)
+            acts = np.argwhere(act_mask & high_prod).flatten()
             act_i = np.random.choice(acts)
             act = np.zeros(node.simulator.action_space['total'])
             act[act_i]=1.
@@ -496,7 +503,7 @@ class MCTSQFRayWorker:
             qvals = self.qf(obs).squeeze()
 
         qmax = qvals.max(dim=1)[0]
-        qmax /= qmax.sum()
+#        qmax /= qmax.sum()
 
         node.simulator = sim_copy
 

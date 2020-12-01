@@ -21,10 +21,10 @@ class ParallelizeCollector:
         for _ in range(self.nthreads):
             self.workers.append(CollectorWorker.remote(self.collector))
 
-    def get_rollouts(self, n):
+    def get_rollouts(self, n, rollout_kwargs={}):
         tasks = []
         for i in range(n):
-            tasks.append(self.workers[i % self.nthreads].get_rollout.remote(collector=self.collector, i=i))
+            tasks.append(self.workers[i % self.nthreads].get_rollout.remote(collector=self.collector, i=i, rollout_kwargs=rollout_kwargs))
 
         out = self.collector.setup_rollout_dict()
 
@@ -43,9 +43,9 @@ class CollectorWorker:
     def __init__(self, collector):
         self.collector = copy.deepcopy(collector)
 
-    def get_rollout(self, collector, i):
+    def get_rollout(self, collector, i, rollout_kwargs):
         collector_copy = copy.deepcopy(collector)
-        return collector_copy.get_rollout(i=i)
+        return collector_copy.get_rollout(**rollout_kwargs)
 
 class Collector:
     """
@@ -57,8 +57,8 @@ class Collector:
         self.reset_board = reset_board
         self.reward_scale = reward_scale
 
-    def get_rollouts(self, n):
-        rollouts = [self.get_rollout(i=_) for _ in range(n)]
+    def get_rollouts(self, qf1, qf2, n):
+        rollouts = [self.get_rollout(qf1, qf2) for _ in range(n)]
         out = self.setup_rollout_dict()
 
         if n == 0:
