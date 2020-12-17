@@ -74,7 +74,7 @@ buf = SimpleReplayBuffer(placement_simulator, capacity = 500000)
 #placement_simulator.render()
 #plt.pause(1e-2)
 
-algo = SelfPlayDQN(placement_simulator, qf, target_qf, buf, collector, eval_collector, cmp_collector, rollouts_per_epoch=200, cmp_rollouts_per_epoch=200, qf_itrs=200, qf_batch_size=256, qf_lr=1e-4, target_update_tau=0.005)
+algo = SelfPlayDQN(placement_simulator, qf, target_qf, buf, collector, eval_collector, cmp_collector, rollouts_per_epoch=200, cmp_rollouts_per_epoch=200, qf_itrs=200, qf_batch_size=256, qf_lr=1e-4, target_update_tau=0.005, discount=1.0)
 
 experiment = Experiment(algo, '../../../experiments/catan_initial_placement_alphago_dqn', save_every=20, save_logs_every=5)
 import torch

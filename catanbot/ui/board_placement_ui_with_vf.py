@@ -18,6 +18,7 @@ from catanbot.core.independent_action_simulator import IndependentActionsCatanSi
 from catanbot.board_placement.initial_placement_simulator import InitialPlacementSimulator, InitialPlacementSimulatorWithPenalty
 from catanbot.rl.collectors.initial_placement_collector import InitialPlacementCollector
 from catanbot.board_placement.initial_placement_mcts import RayMCTSQFSearch
+from catanbot.rl.networks.graphsage import GraphSAGEQMLP
 
 class BoardPlacementUI:
     """
@@ -47,9 +48,12 @@ class BoardPlacementUI:
         s.reset_from(self.board, self.agents)
         placement_agents = [InitialPlacementAgent(self.board), InitialPlacementAgent(self.board), InitialPlacementAgent(self.board), InitialPlacementAgent(self.board)]
         placement_simulator = InitialPlacementSimulator(s, placement_agents)
+
+        self.use_graph = isinstance(network, GraphSAGEQMLP) or isinstance(network.qf1, GraphSAGEQMLP)
+
         collector = InitialPlacementCollector(placement_simulator, reset_board=True, reward_scale=1.)
         self.qf = network
-        self.mcts = RayMCTSQFSearch(placement_simulator, self.qf, n_threads=self.nthreads)
+        self.mcts = RayMCTSQFSearch(placement_simulator, self.qf, n_threads=self.nthreads, use_graph=self.use_graph)
         self.running_mcts = False
         self.mcts_results = None
 
@@ -172,7 +176,7 @@ class BoardPlacementUI:
         if self.mcts_button.collidepoint(event.pos):
             self.mcts.root.simulator.simulator.reset_from(self.board, self.agents)
             self.mcts.root.simulator.turn = self.turn_number
-            self.mcts = RayMCTSQFSearch(self.mcts.root.simulator, self.qf, n_threads=self.nthreads, workers = self.mcts.workers)
+            self.mcts = RayMCTSQFSearch(self.mcts.root.simulator, self.qf, n_threads=self.nthreads, workers = self.mcts.workers, use_graph=self.use_graph)
             topk = self.run_mcts()
             self.mcts_results = topk
 
@@ -191,14 +195,14 @@ class BoardPlacementUI:
 #            self.mcts.update_root(self.board)
             self.mcts.root.simulator.simulator.reset_from(self.board, self.agents)
             self.mcts.root.simulator.turn = self.turn_number
-            self.mcts = RayMCTSQFSearch(self.mcts.root.simulator, self.qf, n_threads=self.nthreads, workers = self.mcts.workers)
+            self.mcts = RayMCTSQFSearch(self.mcts.root.simulator, self.qf, n_threads=self.nthreads, workers = self.mcts.workers, use_graph=self.use_graph)
 
         if self.randomize_button.collidepoint(event.pos):
             self.turn_number = 0
             self.board.reset()
             self.mcts.root.simulator.simulator.reset_from(self.board, self.agents)
             self.mcts.root.simulator.turn = self.turn_number
-            self.mcts = RayMCTSQFSearch(self.mcts.root.simulator, self.qf, n_threads=self.nthreads, workers = self.mcts.workers)
+            self.mcts = RayMCTSQFSearch(self.mcts.root.simulator, self.qf, n_threads=self.nthreads, workers = self.mcts.workers, use_graph=self.use_graph)
 #            self.mcts.simulator.reset_from(self.board, self.agents)
 #            self.mcts.update_root(self.board)
 #            self.mcts.root.turn_number = 0

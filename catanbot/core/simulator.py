@@ -89,6 +89,37 @@ class CatanSimulator:
         }
 
     @property
+    def graph_observation_space(self):
+        return {
+            'board':self.board.graph_observation_space,
+            'player':self.players[self.turn].observation_space,
+            'vp':np.array(4),
+            'army':np.array(4),
+            'road':np.array(4),
+            'total':np.array(self.players[self.turn].observation_space['total'] + 12)
+        } 
+
+    @property
+    def graph_observation(self):
+        board_obs = self.board.graph_observation()
+        player_obs = self.players[self.turn].observation
+        vp = self.vp
+        army = np.zeros(4)
+        road = np.zeros(4)
+        if self.largest_army_pidx != -1:
+            army[self.largest_army_pidx] = 1.
+        if self.longest_road_pidx != -1:
+            road[self.longest_road_pidx] = 1.
+
+        return {
+            'board':board_obs,
+            'player':player_obs,
+            'vp':vp,
+            'army':army,
+            'road':road
+        }
+
+    @property
     def observation_flat(self):
         obs = self.observation
         board_obs_flat = np.concatenate([obs['board'][k].flatten() for k in ['tiles', 'roads', 'settlements']])

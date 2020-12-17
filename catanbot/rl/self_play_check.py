@@ -47,4 +47,4 @@ placement_simulator.players = [EpsilonGreedyPlacementAgent(b, qf1, lambda e:0., 
 
 collector = InitialPlacementComparisonCollector(placement_simulator, reset_board=True, reward_scale=1.)
 
-print(collector.get_rollouts(qf1, qf2, 400))
+print(collector.get_rollouts(qf1, qf2, 100))

@@ -12,6 +12,8 @@ from catanbot.board_placement.agents.base import InitialPlacementAgent, MakeDete
 from catanbot.core.independent_action_simulator import IndependentActionsCatanSimulator
 from catanbot.board_placement.initial_placement_simulator import InitialPlacementSimulator, InitialPlacementSimulatorWithPenalty
 from catanbot.rl.collectors.initial_placement_collector import InitialPlacementCollector
+from catanbot.rl.collectors.graph_initial_placement_collector import GraphInitialPlacementCollector
+from catanbot.rl.networks.graphsage import GraphSAGEQMLP
 
 """
 Revised version of MCTS with a learned Q function. Since the slow part is the rollout collection and torch batches by default, no need to parallelize.
@@ -24,7 +26,7 @@ class MCTSQFNode:
     """
     General node class for the QF MCTS.
     """
-    def __init__(self, simulator, parent, prev_act):
+    def __init__(self, simulator, parent, prev_act, use_graph):
         self.simulator = simulator
         self.parent = parent
         self.stats = torch.zeros(4)
@@ -32,7 +34,11 @@ class MCTSQFNode:
         self.prev_act = prev_act
         self.children = []
         #Hooray for garbage code!
-        c = InitialPlacementCollector(self.simulator)
+        self.use_graph = use_graph
+        if use_graph:
+            c = GraphInitialPlacementCollector(self.simulator)
+        else:
+            c = InitialPlacementCollector(self.simulator)
         self.flatten_obs = lambda x:c.flatten_observation(x)
         self.visit_count = 0
         self.prob = 1. #Alphago uses policy output to bias exploration. We can use Boltzmann policy.
@@ -67,7 +73,7 @@ class MCTSQFNode:
 
             sim_new = copy.deepcopy(self.simulator)
             sim_new.step({'placement':np.reshape(act, [54, 3])})
-            new_node = MCTSQFNode(sim_new, self, act, qf)
+            new_node = MCTSQFNode(sim_new, self, act, qf, self.use_graph)
             new_node.prob = q_probs[i]
             ch.append(new_node)
 
@@ -122,11 +128,12 @@ class MCTSQFSearch:
     """
     Basically the same as the other one.
     """
-    def __init__(self, simulator, qf):
+    def __init__(self, simulator, qf, use_graph=False):
         self.simulator = simulator
         self.original_board = simulator.simulator.board
         self.original_agents = simulator.players
-        self.root = MCTSQFNode(copy.deepcopy(simulator), None, None, qf)
+        self.use_graph = use_graph
+        self.root = MCTSQFNode(copy.deepcopy(simulator), None, None, qf, use_graph)
         self.qf = qf
 
     def search(self, n_rollouts = None, max_time = None, c=1.0, verbose=False):
@@ -200,7 +207,7 @@ class MCTSQFSearch:
         while not curr.is_leaf:
             #Randomly sample argmaxes to get better coverage when using multiple trees
             ucbs = curr.children_ucb(c=0.)
-            #exploration_bonuses = c * torch.tensor([ch.prob / (1+ch.visit_count) for ch in curr.children])
+            exploration_bonuses = c * torch.tensor([ch.prob / (1+ch.visit_count) for ch in curr.children])
             exploration_bonuses = c * torch.tensor([ch.prob * (np.sqrt(curr.visit_count) / (1+ch.visit_count)) for ch in curr.children])
             ucbs += exploration_bonuses
             _max = ucbs.max()
@@ -250,20 +257,22 @@ class RayMCTSQFSearch:
     """
     Use Ray to parallelize the search.
     """
-    def __init__(self, simulator, qf, n_threads = 1, workers = None):
+    def __init__(self, simulator, qf, lam=0.3, n_threads = 1, workers = None, use_graph=False):
         ray.init(ignore_reinit_error=True)
         self.simulator = simulator
         self.original_board = simulator.simulator.board
         self.original_agents = simulator.players
-        self.root = MCTSQFNode(copy.deepcopy(simulator), None, None)
+        self.root = MCTSQFNode(copy.deepcopy(simulator), None, None, use_graph)
         self.qf = qf
         self.n_threads = n_threads
         self.workers = []
         self.sigstop = False
+        self.use_graph = use_graph
+        self.lam = lam
 
         if workers is None:
             for _ in range(self.n_threads):
-                self.workers.append(MCTSQFRayWorker.remote(qf))
+                self.workers.append(MCTSQFRayWorker.remote(qf, self.lam, use_graph))
         else:
             self.workers = workers
 
@@ -377,14 +386,12 @@ class RayMCTSQFSearch:
             #Randomly sample argmaxes to get better coverage when using multiple trees
             ucbs = curr.children_ucb(c=0., bias=bias)
             exploration_bonuses = c * torch.tensor([ch.prob * (np.sqrt(curr.visit_count) / (1+ch.visit_count)) for ch in curr.children])
-#            print('ucb=', ucbs)
-#            print('ebs=', exploration_bonuses)
+#            exploration_bonuses = c * torch.tensor([(1/len(curr.children)) * (np.sqrt(curr.visit_count) / (1+ch.visit_count)) for ch in curr.children])
             ucbs += exploration_bonuses
             _max = ucbs.max()
             maxidxs = torch.where(ucbs >= _max)[0]
             idx = maxidxs[torch.randint(0, maxidxs.shape[0], (1,))]
             curr = curr.children[idx]
-#            path.append([curr.prev_act.argmax()//3, curr.prev_act.argmax()%3])
             path.append(curr.prev_act.argmax())
         return curr, path
 
@@ -444,16 +451,28 @@ class RayMCTSQFSearch:
 
 @ray.remote
 class MCTSQFRayWorker:
-    def __init__(self, qf):
+    def __init__(self, qf, lam, use_graph):
         self.qf = qf
+        self.use_graph = use_graph
+        self.lam = lam
+
+    def get_obs(self, node):
+        if self.use_graph:
+            obs = node.flatten_obs(node.simulator.graph_observation)
+            obs = {k:torch.tensor(v).unsqueeze(0).float() for k,v in obs.items()}
+
+        else:
+            obs = node.flatten_obs(node.simulator.observation)
+            obs = torch.tensor(obs).float().unsqueeze(0)
+
+        return obs
 
     def expand(self, x):
         """
         Generate the board states from all possible actions from current player in current state
         """
         node = copy.deepcopy(x)
-        obs = node.flatten_obs(node.simulator.observation)
-        obs = torch.tensor(obs).float().unsqueeze(0)
+        obs = self.get_obs(node)
         with torch.no_grad():
             qvals = self.qf(obs).squeeze()
         qvals = qvals[node.simulator.player_idx]
@@ -474,13 +493,13 @@ class MCTSQFRayWorker:
 
             sim_new = copy.deepcopy(node.simulator)
             sim_new.step({'placement':np.reshape(act, [54, 3])})
-            new_node = MCTSQFNode(sim_new, node, act)
+            new_node = MCTSQFNode(sim_new, node, act, self.use_graph)
             new_node.prob = q_probs[i]
             ch.append(new_node)
 
         return ch
         
-    def rollout(self, x, lam=0.2):
+    def rollout(self, x):
         node = copy.deepcopy(x)
         sim_copy = copy.deepcopy(node.simulator)
         while not node.simulator.terminal:
@@ -496,9 +515,7 @@ class MCTSQFRayWorker:
 
         rew = node.simulator.reward()
 
-#        obs = node.flatten_obs(sim_copy.observation)
-        obs = node.flatten_obs(node.simulator.observation)
-        obs = torch.tensor(obs).float().unsqueeze(0)
+        obs = self.get_obs(node)
         with torch.no_grad():
             qvals = self.qf(obs).squeeze()
 
@@ -507,7 +524,7 @@ class MCTSQFRayWorker:
 
         node.simulator = sim_copy
 
-        out = lam * qmax + (1-lam) * rew
+        out = self.lam * qmax + (1-self.lam) * rew
 
         return qmax
 
@@ -527,9 +544,14 @@ if __name__ == '__main__':
 
     placement_simulator = InitialPlacementSimulator(s, placement_agents)
 
-    collector = InitialPlacementCollector(placement_simulator, reset_board=True, reward_scale=1.)
+    isgraph = isinstance(qf, GraphSAGEQMLP) or isinstance(qf.qf1, GraphSAGEQMLP)
 
-    mcts = RayMCTSQFSearch(placement_simulator, qf, n_threads=12)
+    if isgraph:
+        collector = GraphInitialPlacementCollector(placement_simulator, reset_board=True, reward_scale=1.)
+    else:
+        collector = InitialPlacementCollector(placement_simulator, reset_board=True, reward_scale=1.)
+
+    mcts = RayMCTSQFSearch(placement_simulator, qf, n_threads=12, use_graph=isgraph)
     import pdb;pdb.set_trace()
 #    mcts = MCTSQFSearch(placement_simulator, qf)
     mcts.search(max_time=600.0, verbose=True, c=2.0)

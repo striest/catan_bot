@@ -50,6 +50,14 @@ class InitialPlacementAgent:
         return {
             'placement':np.random.rand(54, 3) * self.action_mask()
         }
+
+class HeuristicInitialPlacementAgent(InitialPlacementAgent):
+    def action(self, obs, flat_obs):
+        production = self.board.compute_production()[:, 1]
+        prod = np.stack([production * 3], axis=1)
+        return {
+            'placement':prod * self.action_mask()
+        }
         
 class MakeDeterministic(InitialPlacementAgent):
     """

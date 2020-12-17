@@ -70,6 +70,9 @@ class Board:
         neighbor_roads = self.settlements[:, 5:8]
         neighbors = np.ones([self.settlements.shape[0], 3]).astype(int) * -1
 
+        self.production_info = self.compute_production()
+        self.structure_tensor = self.get_structure_tensor()
+
         for i, road_idx_vec in enumerate(neighbor_roads.T):
             roads = self.roads[road_idx_vec]
 
@@ -164,6 +167,9 @@ class Board:
         for i, locs in enumerate(self.port_locations):
             self.settlements[locs[:2], 2] = self.port_dist[port_idxs[i]]
 
+        self.production_info = self.compute_production()
+        self.structure_tensor = self.get_structure_tensor()
+
     def randomize_fair(self, tile_idxs):
         """
         Randomize production values such that no settlement spot has more than one 6 or 8 (collectively)
@@ -190,7 +196,10 @@ class Board:
                 adj_flat = adj_flat[(adj_flat >= 0)]
                 invalid_idxs = np.concatenate([adj_flat, high_prod_idxs, np.array([desert_idx])])
                 valid_idxs = np.setdiff1d(np.arange(19), invalid_idxs)
-                valid_idx = np.random.choice(valid_idxs)
+                if valid_idxs.size > 0:
+                    valid_idx = np.random.choice(valid_idxs)
+                else:
+                    valid_idx = idx
                 value_ordering[[idx, valid_idx]] = value_ordering[[valid_idx, idx]]
                 high_prod_idxs[i] = valid_idx
                 adj = adjacencies[high_prod_idxs] 
@@ -218,6 +227,8 @@ class Board:
             r = int(t[0])
             self.settlements[self.port_locations[i, 0], 2] = r
             self.settlements[self.port_locations[i, 1], 2] = r
+        self.production_info = self.compute_production()
+        self.structure_tensor = self.get_structure_tensor()
 
     def has_dev_cards(self):
         return self.dev_idx < 25
@@ -479,13 +490,87 @@ class Board:
         table = ['k', 'r', 'g', 'b', 'y']
         return table[i]
 
+    @property
+    def graph_observation_space(self):
+        obs = self.graph_observation()
+        return {
+            'vertices':np.array(obs['vertices'].shape),
+            'edges':np.array(obs['edges'].shape),
+        }
+
+    #GNN Nonsense
+    def graph_observation(self):
+        """
+        For input to graph neural networks (hopefully this can help with generalization)
+        For this GNN problem, we can assume constant graph structure. As such, use a different func to get incidence/adjecency matrices.
+        V: A 54 x n tensor containing:
+            1. Occupancy info
+            2. Settlement type info
+            3. Production info (resource types, production values, roll numbers)
+            4. Port info
+
+        E: A 72 x n tensor containing:
+            1. Occupancy info (thats it)
+            
+        """
+        vertex_occupancy = self.settlements[:, 0]
+        vertex_type = self.settlements[:, 1]
+        vertex_port = self.settlements[:, 2]
+        vertex_tiles = self.settlements[:, -3:]
+
+        vertex_occupancy = to_one_hot(vertex_occupancy, 5)
+        vertex_port = to_one_hot(vertex_port, 7)
+        vertex_production = self.production_info[:, [1]]
+
+        vertex_tile_info = self.tiles[vertex_tiles]
+        vertex_tile_type = vertex_tile_info[:, :, 0]
+        vertex_tile_dice_val = vertex_tile_info[:, :, [1]]
+        vertex_tile_production = np.clip(6-np.abs(7 - vertex_tile_dice_val), 0, 5)
+        vertex_tile_blocked = vertex_tile_info[:, :, [-1]]
+
+        vertex_tile_type = np.stack([to_one_hot(x, 6) for x in vertex_tile_type.T], axis=1)
+
+        vertex_tile_feats = np.concatenate([vertex_tile_type, vertex_tile_dice_val, vertex_tile_production, vertex_tile_blocked], axis=2)
+        vertex_tile_feats[vertex_tiles == -1] = -1 #Mask placeholders (use -1, not 0)
+
+        vertex_tile_feats = np.reshape(vertex_tile_feats, [54, -1])
+
+        vertex_feats = np.concatenate([vertex_occupancy, vertex_production, vertex_port, vertex_tile_feats], axis=1)
+
+        edge_occupancy = self.roads[:, 0]
+
+        edge_occupancy_one_hot = to_one_hot(edge_occupancy, 5)
+
+        edge_feats = edge_occupancy_one_hot
+
+        return {
+            'vertices': vertex_feats,
+            'edges':edge_feats
+        }
+
+    def get_structure_tensor(self):
+        """
+        A 54 x 3 x 2 tensor that encodes the structure of the Catan board. Essentially, it's an adjacency list indexed as:
+        [vertex dim x edge dim x {vertexid/edgeid}]
+        """
+        road_neighbors = self.settlements[:, 5:8]
+        settlement_neighbors = self.roads[road_neighbors][:, :, 1:]
+        mask = ~(settlement_neighbors == np.expand_dims(np.expand_dims(np.arange(54), axis=1), axis=2))
+        settlement_neighbors = np.sum(mask * settlement_neighbors, axis=2).astype(int)
+        settlement_neighbors[road_neighbors == -1] = -1
+
+        return np.stack([settlement_neighbors, road_neighbors], axis=2)
+
 if __name__ == '__main__':
     board = Board()
+    board.reset()
+    obs = board.graph_observation()
+    import pdb;pdb.set_trace()
 
     for i in range(10):
         board.reset()
         board.render();plt.show()
-    
+   
 
     board.place_settlement(3, 1, False)
     board.place_settlement(23, 2, False)
@@ -500,6 +585,7 @@ if __name__ == '__main__':
     board.place_road(18, 3)
     board.place_road(34, 4)
 
+    print(board.graph_observation())
     import pdb;pdb.set_trace()
     print(board.observation)
     print(board.observation_space)

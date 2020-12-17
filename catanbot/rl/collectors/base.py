@@ -57,8 +57,8 @@ class Collector:
         self.reset_board = reset_board
         self.reward_scale = reward_scale
 
-    def get_rollouts(self, qf1, qf2, n):
-        rollouts = [self.get_rollout(qf1, qf2) for _ in range(n)]
+    def get_rollouts(self, n):
+        rollouts = [self.get_rollout() for _ in range(n)]
         out = self.setup_rollout_dict()
 
         if n == 0:
