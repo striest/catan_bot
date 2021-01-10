@@ -9,13 +9,14 @@ from catanbot.core.board import Board
 from catanbot.agents.independent_actions_agents import IndependentActionsHeuristicAgent, IndependentActionsAgent
 from catanbot.board_placement.agents.base import InitialPlacementAgent, MakeDeterministic
 from catanbot.board_placement.agents.mlp_agent import MLPPlacementAgent
-from catanbot.board_placement.agents.epsilon_greedy_agent import EpsilonGreedyPlacementAgent
+from catanbot.board_placement.agents.epsilon_greedy_agent import EpsilonGreedyPlacementAgent, GNNEpsilonGreedyPlacementAgent
 from catanbot.core.independent_action_simulator import IndependentActionsCatanSimulator
 from catanbot.board_placement.initial_placement_simulator import InitialPlacementSimulator, InitialPlacementSimulatorWithPenalty
 
 from catanbot.rl.networks.mlp import MLP
 from catanbot.rl.networks.valuemlp import VMLP
 from catanbot.rl.collectors.initial_placement_collector import InitialPlacementCollector
+from catanbot.rl.collectors.graph_initial_placement_collector import GraphInitialPlacementCollector
 from catanbot.rl.collectors.base import ParallelizeCollector
 from catanbot.rl.replaybuffers.simple_replay_buffer import SimpleReplayBuffer
 
@@ -39,21 +40,20 @@ qf = torch.load(args.qf_fp)
 qf.eval()
 
 placement_simulator = InitialPlacementSimulator(s, placement_agents)
-#placement_simulator = InitialPlacementSimulatorWithPenalty(s, placement_agents)
-placement_simulator.players = [EpsilonGreedyPlacementAgent(b, qf, lambda e:0., pidx=0), EpsilonGreedyPlacementAgent(b, qf, lambda e:0., pidx=1), EpsilonGreedyPlacementAgent(b, qf, lambda e:0., pidx=2), EpsilonGreedyPlacementAgent(b, qf, lambda e:0., pidx=3)]
+placement_simulator.players = [GNNEpsilonGreedyPlacementAgent(b, qf, lambda e:0., pidx=0), GNNEpsilonGreedyPlacementAgent(b, qf, lambda e:0., pidx=1), GNNEpsilonGreedyPlacementAgent(b, qf, lambda e:0., pidx=2), GNNEpsilonGreedyPlacementAgent(b, qf, lambda e:0., pidx=3)]
 
-collector = InitialPlacementCollector(placement_simulator, reset_board=True, reward_scale=1.)
+collector = GraphInitialPlacementCollector(placement_simulator, reset_board=True, reward_scale=1.)
 
 q_seq = []
 timing = []
 obses = []
 
 while not placement_simulator.terminal:
-    obs = collector.flatten_observation(placement_simulator.observation)
-    obs = torch.tensor(obs).float()
+    obs = collector.flatten_observation(placement_simulator.graph_observation)
+    obs = {k:torch.tensor(v).float().unsqueeze(0) for k,v in obs.items()}
     with torch.no_grad():
         t = time.time()
-        qvals = qf(obs.unsqueeze(0)).squeeze()
+        qvals = qf(obs).squeeze()
         timing.append(time.time() - t)
 
     q_seq.append(qvals.max(dim=1)[0])
@@ -65,16 +65,13 @@ while not placement_simulator.terminal:
 
     obses.append(obs)
 
+obs = collector.flatten_observation(placement_simulator.graph_observation)
+obs = {k:torch.tensor(v).float().unsqueeze(0) for k,v in obs.items()}
+
 with torch.no_grad():
-    qvals = qf(obs.unsqueeze(0)).squeeze()
+    qvals = qf(obs).squeeze()
 q_seq.append(qvals.max(dim=1)[0])
 q_seq = torch.stack(q_seq, dim=0)
-
-obses = torch.stack(obses, dim=0)
-t = time.time()
-with torch.no_grad():
-    qf(obses)
-    print('batch time = {:.4f}'.format(time.time() - t))
 
 for i in range(4):
     print('Player {} Q = '.format(i+1))

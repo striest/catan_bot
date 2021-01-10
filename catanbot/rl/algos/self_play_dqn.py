@@ -94,7 +94,7 @@ class SelfPlayDQN(OffPolicyRLAlgorithm):
         self.logger.record_item("Reward Scale", self.reward_scale)
         self.logger.record_item("Num Episodes", self.logger.get(prefix='', field='Num Episodes', default=0) + trajs['terminal'].float().sum().item())
         self.logger.record_item("Num Added Episodes", trajs['terminal'].float().sum().item())
-        self.logger.record_item("Total Steps", self.logger.get(prefix='', field='Total Steps', default=0) + trajs['observation'].shape[0])
+        self.logger.record_item("Total Steps", self.logger.get(prefix='', field='Total Steps', default=0) + trajs['action'].shape[0])
 
         self.logger.record_item('1 Policy 1 Eval Actions', trajs['action'][0:100:8].argmax(dim=1)/3, prefix='Performance')
         self.logger.record_item('2 Policy 2 Eval Actions', trajs['action'][1:100:8].argmax(dim=1)/3, prefix='Performance')
@@ -113,7 +113,7 @@ class SelfPlayDQN(OffPolicyRLAlgorithm):
             self.logger.record_item('Update time', update_time, prefix = 'Timing')
 
             t = time.time()
-#            self.log()
+            self.log()
             log_time = time.time() - t
             self.logger.record_item('Log Time', log_time, prefix= 'Timing')
 
@@ -131,7 +131,7 @@ class SelfPlayDQN(OffPolicyRLAlgorithm):
         self.logger.record_item("New Policy Win Rate", wins[1])
         self.logger.record_item("N Updates", self.nupdates)
         self.logger.record_item("Num Compare Eposides", self.cmp_rollouts_per_epoch)
-        self.logger.record_iter("Epochs Since Last Win", self.current_epoch - self.last_win_epoch)
+        self.logger.record_item("Epochs Since Last Win", self.current_epoch - self.last_win_epoch)
         self.logger.record_item("Compare Time", cmp_time, prefix = "Timing")
 
         self.log()
@@ -192,11 +192,14 @@ class SelfPlayDQN(OffPolicyRLAlgorithm):
             soft_update_from_to(self.qf, self.target_qf, self.target_update_tau)
         
 #        import pdb;pdb.set_trace()
+        """
         for idx2 in range(0, self.replay_buffer.n, 8):
 #            print(idx2)
             if (self.replay_buffer.buffer['observation'][0, :100] - self.replay_buffer.buffer['observation'][idx2, :100]).abs().sum() != 0:
                 break
+        """
 
+        """
         init_obs1 = self.replay_buffer.buffer['observation'][0]
         init_obs2 = self.replay_buffer.buffer['observation'][1]
         init_obs3 = self.replay_buffer.buffer['observation'][2]
@@ -206,6 +209,7 @@ class SelfPlayDQN(OffPolicyRLAlgorithm):
         init_q3 = self.qf(init_obs2)[0, 2]
         init_q4 = self.qf(init_obs2)[0, 3]
         out = torch.cat([init_q1.view(54, 3), init_q2.view(54, 3), init_q3.view(54, 3), init_q4.view(54, 3)], dim=1)
+        """
         
         """
         init_obs1 = self.replay_buffer.buffer['observation'][0]
@@ -221,7 +225,7 @@ class SelfPlayDQN(OffPolicyRLAlgorithm):
 
         #Update logs whenever you collect new samples
         self.logger.record_item('Loss', qf_loss, prefix='QF')
-        self.logger.record_item('_P1-2 Q Intitial', out, prefix='Performance') 
+#        self.logger.record_item('_P1-2 Q Intitial', out, prefix='Performance') 
         
     @property
     def hyperparameters(self):

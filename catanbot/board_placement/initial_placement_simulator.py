@@ -57,6 +57,21 @@ class InitialPlacementSimulator:
         return obs
 
     @property
+    def graph_observation_space(self):
+        return self.simulator.graph_observation_space
+
+    @property
+    def graph_observation(self):
+        """
+        Represent the board state as a graph for GNNs.
+        """
+        temp = self.simulator.turn
+        self.simulator.turn = self.player_idx
+        obs = self.simulator.graph_observation
+        self.simulator.turn = temp
+        return obs
+
+    @property
     def terminal(self):
         return self.turn >= 8
 

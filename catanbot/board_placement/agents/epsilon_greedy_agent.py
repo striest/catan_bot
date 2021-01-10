@@ -63,6 +63,37 @@ class EpsilonGreedyPlacementAgent(InitialPlacementAgent):
         return {
             'placement':act.detach().numpy()
         }
+
+class GNNEpsilonGreedyPlacementAgent(EpsilonGreedyPlacementAgent):
+    """
+    Different class bc graph input is a little different.
+    """
+    def action_dist(self, obs, obs_flat):
+        mask = torch.tensor(self.action_mask()).flatten()
+        inp = {k:v.float() if isinstance(v, torch.Tensor) else torch.tensor(v).float() for k, v in obs_flat.items()}
+
+        #TODO: Fix to assert dim=3 instead of 2
+        if len(inp['vertices'].shape) == 2:
+            inp['vertices'] = inp['vertices'].unsqueeze(0)
+        if len(inp['edges'].shape) == 2:
+            inp['edges'] = inp['edges'].unsqueeze(0)
+        if len(inp['player'].shape) == 1:
+            inp['player'] = inp['player'].unsqueeze(0)
+
+        epsilon = self.epsilon_scheduler(self.epoch)
+        rands = torch.rand(inp['vertices'].shape[0])
+        unif = (torch.ones(54*3) * mask)
+        unif /= unif.sum()
+
+        qs = self.network(inp)[:, self.pidx]
+        qs[:, ~mask] = -1e6 #Don't pick invalid actions
+
+        acts = torch.zeros(inp['vertices'].shape[0], 54*3)
+        acts[torch.arange(inp['vertices'].shape[0]), torch.argmax(qs, dim=1)] = 1.
+        acts[rands < epsilon] = unif
+
+        dist = torch.distributions.OneHotCategorical(probs=acts)
+        return dist 
         
 class EpsilonGreedyPlacementAgentWithMask(EpsilonGreedyPlacementAgent):
     """
