@@ -10,7 +10,6 @@ setup(
         'numpy>=1.16',
         'matplotlib>=3.1',
         'ray>=0.8.6',
-        'mpi4py>=3.0',
         'pygame>=2.0.0.dev6'
     ],
     long_description=open('README.md').read(),
